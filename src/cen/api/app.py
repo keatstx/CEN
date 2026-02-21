@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import structlog
@@ -11,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from cen.config import Settings
 from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
+from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
 from cen.privacy.pii_scrubber import create_scrubber
 from cen.telemetry.bus import AsyncEventBus
@@ -19,6 +21,7 @@ from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
 from cen.api.routes import health, llm, workflows
+from cen.api.routes import sessions
 
 logger = structlog.get_logger()
 
@@ -52,10 +55,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _configure_structlog(settings)
 
+    # Session store — created here, initialized/closed via lifespan
+    session_store = SessionStore(settings.db_path)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Ensure data directory exists (skip for :memory:)
+        if settings.db_path != ":memory:":
+            Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
+        await session_store.initialize()
+        yield
+        await session_store.close()
+
     app = FastAPI(
         title="CEN AI Concierge",
         description="Community Equity Navigators — AOP/DAG Business Logic Platform",
         version="0.2.0",
+        lifespan=lifespan,
     )
 
     # Middleware
@@ -97,11 +113,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
 
     # Dependency injection
-    init_dependencies(settings, engines, llm_instance)
+    init_dependencies(settings, engines, llm_instance, session_store=session_store)
 
     # Routes
     app.include_router(workflows.router)
     app.include_router(llm.router)
     app.include_router(health.router)
+    app.include_router(sessions.router)
 
     return app

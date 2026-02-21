@@ -25,5 +25,13 @@ class CycleDetectedError(CENError):
         super().__init__("AOP contains a cycle — circular logic paths are not allowed.")
 
 
+class SessionNotFoundError(CENError):
+    """Raised when a requested session does not exist."""
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        super().__init__(f"Session '{session_id}' not found.")
+
+
 class LLMUnavailableError(CENError):
     """Raised when the LLM backend is unreachable and no fallback succeeds."""

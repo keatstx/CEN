@@ -23,3 +23,6 @@ class Settings(BaseSettings):
 
     # Privacy
     pii_backend: Literal["regex", "presidio"] = "regex"
+
+    # Database
+    db_path: str = "./data/cen.db"

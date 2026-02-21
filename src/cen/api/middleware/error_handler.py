@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 import structlog
 
-from cen.core.exceptions import CENError, CycleDetectedError, ModuleNotFoundError
+from cen.core.exceptions import CENError, CycleDetectedError, ModuleNotFoundError, SessionNotFoundError
 
 logger = structlog.get_logger()
 
@@ -18,6 +18,13 @@ def register_error_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=404,
             content={"error": str(exc), "available": exc.available},
+        )
+
+    @app.exception_handler(SessionNotFoundError)
+    async def session_not_found(request: Request, exc: SessionNotFoundError) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"error": str(exc), "session_id": exc.session_id},
         )
 
     @app.exception_handler(CycleDetectedError)

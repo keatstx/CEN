@@ -57,6 +57,32 @@ class WorkflowResult(BaseModel):
     context: Dict[str, Any]
 
 
+class SessionStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class Session(BaseModel):
+    id: str
+    module_name: str
+    status: SessionStatus = SessionStatus.ACTIVE
+    context: Dict[str, Any] = Field(default_factory=dict)
+    executed_nodes: List[str] = Field(default_factory=list)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class SessionCreate(BaseModel):
+    module_name: str
+    context: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SessionUpdate(BaseModel):
+    context: Optional[Dict[str, Any]] = None
+    status: Optional[SessionStatus] = None
+
+
 class LLMGenerateRequest(BaseModel):
     prompt: str
     max_tokens: int = 128
