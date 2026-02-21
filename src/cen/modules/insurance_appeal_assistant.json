@@ -1,0 +1,108 @@
+{
+  "module_name": "insurance_appeal_assistant",
+  "version": "1.0",
+  "description": "Classifies insurance claim denials and routes to the appropriate appeal pathway.",
+  "nodes": [
+    {
+      "id": "denial_intake",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Denial Intake",
+        "description": "Collect the Explanation of Benefits (EOB) and denial letter details.",
+        "params": {}
+      }
+    },
+    {
+      "id": "classify_denial",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Denial Classification",
+        "description": "Use LLM to classify the denial reason into a category.",
+        "params": {
+          "llm_prompt": "Classify this insurance denial reason: {denial_reason}"
+        }
+      }
+    },
+    {
+      "id": "is_medical_necessity",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Medical Necessity Denial?",
+        "description": "Check if the denial is for medical necessity.",
+        "params": {}
+      },
+      "condition_field": "denial_type",
+      "condition_operator": "==",
+      "condition_value": "medical_necessity",
+      "true_next": "appeal_medical_necessity",
+      "false_next": "is_coding_error"
+    },
+    {
+      "id": "is_coding_error",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Coding Error?",
+        "description": "Check if the denial is due to a coding or billing error.",
+        "params": {}
+      },
+      "condition_field": "denial_type",
+      "condition_operator": "==",
+      "condition_value": "coding_error",
+      "true_next": "appeal_coding",
+      "false_next": "appeal_general"
+    },
+    {
+      "id": "appeal_medical_necessity",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Medical Necessity Appeal",
+        "description": "Draft appeal letter with clinical justification for medical necessity.",
+        "params": {
+          "llm_prompt": "Draft a medical necessity appeal for: {denial_reason}"
+        }
+      }
+    },
+    {
+      "id": "appeal_coding",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Coding Error Appeal",
+        "description": "Draft appeal citing correct CPT/ICD codes.",
+        "params": {
+          "llm_prompt": "Draft a coding error appeal for: {denial_reason}"
+        }
+      }
+    },
+    {
+      "id": "appeal_general",
+      "type": "ACTION",
+      "metadata": {
+        "label": "General Appeal",
+        "description": "Draft a general appeal letter for other denial types.",
+        "params": {
+          "llm_prompt": "Draft a general insurance appeal for: {denial_reason}"
+        }
+      }
+    },
+    {
+      "id": "handoff_navigator",
+      "type": "HANDOFF",
+      "metadata": {
+        "label": "Navigator Review",
+        "description": "Hand off the completed appeal to a Community Equity Navigator.",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    { "source": "denial_intake", "target": "classify_denial", "label": "denial collected" },
+    { "source": "classify_denial", "target": "is_medical_necessity", "label": "classified" },
+    { "source": "is_medical_necessity", "target": "appeal_medical_necessity", "label": "medical necessity" },
+    { "source": "is_medical_necessity", "target": "is_coding_error", "label": "not medical necessity" },
+    { "source": "is_coding_error", "target": "appeal_coding", "label": "coding error" },
+    { "source": "is_coding_error", "target": "appeal_general", "label": "other denial type" },
+    { "source": "appeal_medical_necessity", "target": "handoff_navigator", "label": "appeal drafted" },
+    { "source": "appeal_coding", "target": "handoff_navigator", "label": "appeal drafted" },
+    { "source": "appeal_general", "target": "handoff_navigator", "label": "appeal drafted" }
+  ]
+}

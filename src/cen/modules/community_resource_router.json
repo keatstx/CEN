@@ -1,0 +1,112 @@
+{
+  "module_name": "community_resource_router",
+  "version": "1.0",
+  "description": "Sequential screening for housing, food, and transportation needs, then routes to matching community resources.",
+  "nodes": [
+    {
+      "id": "needs_intake",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Needs Intake",
+        "description": "Collect self-reported social determinant needs from the patient.",
+        "params": {}
+      }
+    },
+    {
+      "id": "housing_need",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Housing Need?",
+        "description": "Determine if the patient has identified a housing need.",
+        "params": {}
+      },
+      "condition_field": "needs_housing",
+      "condition_operator": "==",
+      "condition_value": true,
+      "true_next": "housing_resources",
+      "false_next": "food_need"
+    },
+    {
+      "id": "housing_resources",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Housing Resources",
+        "description": "Compile local housing assistance programs and shelters.",
+        "params": {
+          "llm_prompt": "List community housing resources for someone in {zip_code}."
+        }
+      }
+    },
+    {
+      "id": "food_need",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Food Need?",
+        "description": "Determine if the patient has identified a food insecurity need.",
+        "params": {}
+      },
+      "condition_field": "needs_food",
+      "condition_operator": "==",
+      "condition_value": true,
+      "true_next": "food_resources",
+      "false_next": "transport_need"
+    },
+    {
+      "id": "food_resources",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Food Resources",
+        "description": "Compile local food banks, SNAP assistance, and meal programs.",
+        "params": {
+          "llm_prompt": "List community food resources for someone in {zip_code}."
+        }
+      }
+    },
+    {
+      "id": "transport_need",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Transportation Need?",
+        "description": "Determine if the patient needs transportation assistance.",
+        "params": {}
+      },
+      "condition_field": "needs_transport",
+      "condition_operator": "==",
+      "condition_value": true,
+      "true_next": "transport_resources",
+      "false_next": "handoff_navigator"
+    },
+    {
+      "id": "transport_resources",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Transportation Resources",
+        "description": "Compile medical transportation and transit assistance programs.",
+        "params": {
+          "llm_prompt": "List community transportation resources for someone in {zip_code}."
+        }
+      }
+    },
+    {
+      "id": "handoff_navigator",
+      "type": "HANDOFF",
+      "metadata": {
+        "label": "Navigator Referral",
+        "description": "Hand off compiled resource list to a Community Equity Navigator for follow-up.",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    { "source": "needs_intake", "target": "housing_need", "label": "intake complete" },
+    { "source": "housing_need", "target": "housing_resources", "label": "needs housing" },
+    { "source": "housing_need", "target": "food_need", "label": "no housing need" },
+    { "source": "housing_resources", "target": "food_need", "label": "housing compiled" },
+    { "source": "food_need", "target": "food_resources", "label": "needs food" },
+    { "source": "food_need", "target": "transport_need", "label": "no food need" },
+    { "source": "food_resources", "target": "transport_need", "label": "food compiled" },
+    { "source": "transport_need", "target": "transport_resources", "label": "needs transport" },
+    { "source": "transport_need", "target": "handoff_navigator", "label": "no transport need" },
+    { "source": "transport_resources", "target": "handoff_navigator", "label": "transport compiled" }
+  ]
+}

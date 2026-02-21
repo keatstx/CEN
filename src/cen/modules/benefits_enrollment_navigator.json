@@ -1,0 +1,120 @@
+{
+  "module_name": "benefits_enrollment_navigator",
+  "version": "1.0",
+  "description": "Screens household eligibility for Medicaid, ACA marketplace plans, and CHIP in a cascade.",
+  "nodes": [
+    {
+      "id": "collect_household",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Household Data Collection",
+        "description": "Collect household size, income, state of residence, and dependents under 19.",
+        "params": {}
+      }
+    },
+    {
+      "id": "medicaid_eligible",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Medicaid Eligible?",
+        "description": "Check if household income is below 138% FPL for Medicaid expansion states.",
+        "params": {}
+      },
+      "condition_field": "income_fpl_percent",
+      "condition_operator": "<",
+      "condition_value": 138,
+      "true_next": "enroll_medicaid",
+      "false_next": "aca_eligible"
+    },
+    {
+      "id": "enroll_medicaid",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Medicaid Enrollment",
+        "description": "Prepare Medicaid application with household data.",
+        "params": {
+          "llm_prompt": "Prepare a Medicaid enrollment summary for a household at {income_fpl_percent}% FPL."
+        }
+      }
+    },
+    {
+      "id": "aca_eligible",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "ACA Subsidy Eligible?",
+        "description": "Check if income is between 138-400% FPL for ACA marketplace subsidies.",
+        "params": {}
+      },
+      "condition_field": "income_fpl_percent",
+      "condition_operator": "<",
+      "condition_value": 400,
+      "true_next": "enroll_aca",
+      "false_next": "chip_check"
+    },
+    {
+      "id": "enroll_aca",
+      "type": "ACTION",
+      "metadata": {
+        "label": "ACA Marketplace Enrollment",
+        "description": "Guide through ACA marketplace plan selection with subsidy estimation.",
+        "params": {
+          "llm_prompt": "Estimate ACA subsidy for a household at {income_fpl_percent}% FPL."
+        }
+      }
+    },
+    {
+      "id": "chip_check",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "CHIP Eligible Children?",
+        "description": "Check if there are dependents under 19 who may qualify for CHIP.",
+        "params": {}
+      },
+      "condition_field": "has_children_under_19",
+      "condition_operator": "==",
+      "condition_value": true,
+      "true_next": "enroll_chip",
+      "false_next": "no_program_match"
+    },
+    {
+      "id": "enroll_chip",
+      "type": "ACTION",
+      "metadata": {
+        "label": "CHIP Enrollment",
+        "description": "Prepare CHIP application for eligible children.",
+        "params": {}
+      }
+    },
+    {
+      "id": "no_program_match",
+      "type": "ACTION",
+      "metadata": {
+        "label": "No Program Match",
+        "description": "Document that no government program matches. Flag for community resources.",
+        "params": {}
+      }
+    },
+    {
+      "id": "handoff_counselor",
+      "type": "HANDOFF",
+      "metadata": {
+        "label": "Benefits Counselor Review",
+        "description": "Hand off enrollment package to a benefits counselor for submission.",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    { "source": "collect_household", "target": "medicaid_eligible", "label": "data collected" },
+    { "source": "medicaid_eligible", "target": "enroll_medicaid", "label": "income < 138% FPL" },
+    { "source": "medicaid_eligible", "target": "aca_eligible", "label": "income >= 138% FPL" },
+    { "source": "enroll_medicaid", "target": "handoff_counselor", "label": "application prepared" },
+    { "source": "aca_eligible", "target": "enroll_aca", "label": "income < 400% FPL" },
+    { "source": "aca_eligible", "target": "chip_check", "label": "income >= 400% FPL" },
+    { "source": "enroll_aca", "target": "handoff_counselor", "label": "plan selected" },
+    { "source": "chip_check", "target": "enroll_chip", "label": "has children under 19" },
+    { "source": "chip_check", "target": "no_program_match", "label": "no eligible children" },
+    { "source": "enroll_chip", "target": "handoff_counselor", "label": "CHIP application ready" },
+    { "source": "no_program_match", "target": "handoff_counselor", "label": "flagged for resources" }
+  ]
+}

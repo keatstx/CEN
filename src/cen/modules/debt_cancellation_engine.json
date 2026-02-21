@@ -1,0 +1,90 @@
+{
+  "module_name": "debt_cancellation_engine",
+  "version": "1.0",
+  "description": "Audits medical bills for duplicate charges, No Surprises Act violations, and generates dispute letters.",
+  "nodes": [
+    {
+      "id": "ingest_bill",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Bill Ingestion",
+        "description": "Ingest and parse the patient's itemized medical bill.",
+        "params": {}
+      }
+    },
+    {
+      "id": "audit_duplicates",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Duplicate Charge Audit",
+        "description": "Scan bill line items for duplicate or unbundled charges.",
+        "params": {
+          "llm_prompt": "Analyze the following medical bill for duplicate or unbundled charges: {bill_summary}"
+        }
+      }
+    },
+    {
+      "id": "audit_nsa",
+      "type": "ACTION",
+      "metadata": {
+        "label": "NSA Violation Audit",
+        "description": "Check for No Surprises Act violations such as out-of-network balance billing.",
+        "params": {
+          "llm_prompt": "Check the following bill for No Surprises Act violations: {bill_summary}"
+        }
+      }
+    },
+    {
+      "id": "violations_found",
+      "type": "CONDITION",
+      "metadata": {
+        "label": "Violations Found?",
+        "description": "Determine if any billing errors or violations were identified.",
+        "params": {}
+      },
+      "condition_field": "violations_count",
+      "condition_operator": ">",
+      "condition_value": 0,
+      "true_next": "generate_dispute",
+      "false_next": "flag_clean"
+    },
+    {
+      "id": "generate_dispute",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Generate Dispute Letter",
+        "description": "Draft a formal dispute letter citing identified billing errors and applicable regulations.",
+        "params": {
+          "llm_prompt": "Draft a dispute letter for the following billing violations: {bill_summary}"
+        }
+      }
+    },
+    {
+      "id": "flag_clean",
+      "type": "ACTION",
+      "metadata": {
+        "label": "Flag as Clean",
+        "description": "Mark the bill as reviewed with no actionable findings.",
+        "params": {}
+      }
+    },
+    {
+      "id": "handoff",
+      "type": "HANDOFF",
+      "metadata": {
+        "label": "Navigator Review",
+        "description": "Hand off audit results to a Community Equity Navigator for final action.",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    { "source": "ingest_bill", "target": "audit_duplicates", "label": "bill parsed" },
+    { "source": "audit_duplicates", "target": "audit_nsa", "label": "duplicates checked" },
+    { "source": "audit_nsa", "target": "violations_found", "label": "nsa checked" },
+    { "source": "violations_found", "target": "generate_dispute", "label": "violations > 0" },
+    { "source": "violations_found", "target": "flag_clean", "label": "no violations" },
+    { "source": "generate_dispute", "target": "handoff", "label": "dispute drafted" },
+    { "source": "flag_clean", "target": "handoff", "label": "review complete" }
+  ]
+}
