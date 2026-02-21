@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from cen.api.dependencies import get_engines, get_session_store
+from cen.api.dependencies import get_audit_store, get_engines, get_event_bus, get_session_store
+from cen.core.audit_store import AuditStore
 from cen.core.exceptions import ApprovalNotPendingError, ModuleNotFoundError, SessionNotFoundError
-from cen.core.models import Session, SessionCreate, SessionStatus, SessionUpdate, WorkflowInput, WorkflowResult
+from cen.core.models import AuditEntry, Session, SessionCreate, SessionStatus, SessionUpdate, WorkflowInput, WorkflowResult
 from cen.core.session_store import SessionStore
+from cen.telemetry.bus import AsyncEventBus
+from cen.telemetry.events import ApprovalEvent
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -68,11 +72,24 @@ async def delete_session(
         raise SessionNotFoundError(session_id)
 
 
+@router.get("/{session_id}/audit", response_model=list[AuditEntry])
+async def get_audit_trail(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    audit_store: AuditStore = Depends(get_audit_store),
+) -> List[AuditEntry]:
+    session = await store.get(session_id)
+    if session is None:
+        raise SessionNotFoundError(session_id)
+    return await audit_store.get_by_session(session_id)
+
+
 @router.post("/{session_id}/approve", response_model=WorkflowResult)
 async def approve_session(
     session_id: str,
     engines: dict = Depends(get_engines),
     store: SessionStore = Depends(get_session_store),
+    event_bus: AsyncEventBus = Depends(get_event_bus),
 ):
     session = await store.get(session_id)
     if session is None:
@@ -82,8 +99,9 @@ async def approve_session(
 
     # Mark the pending node as approved
     approved_nodes = list(session.approved_nodes)
-    if session.pending_node:
-        approved_nodes.append(session.pending_node)
+    pending_node = session.pending_node
+    if pending_node:
+        approved_nodes.append(pending_node)
     await store.update(
         session_id,
         status=SessionStatus.ACTIVE,
@@ -91,13 +109,24 @@ async def approve_session(
         approved_nodes=approved_nodes,
     )
 
+    # Emit approval event
+    if pending_node:
+        await event_bus.emit(
+            ApprovalEvent(
+                session_id=session_id,
+                module=session.module_name,
+                node_id=pending_node,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        )
+
     # Re-execute the workflow from the top with approved nodes
     engine = engines.get(session.module_name)
     if engine is None:
         raise ModuleNotFoundError(session.module_name, list(engines.keys()))
 
     workflow_input = WorkflowInput(module_name=session.module_name, context=session.context)
-    result = await engine.execute(workflow_input, approved_nodes=set(approved_nodes))
+    result = await engine.execute(workflow_input, approved_nodes=set(approved_nodes), session_id=session_id)
 
     # Save result back to session (same logic as /execute)
     combined_nodes = list(dict.fromkeys(session.executed_nodes + result.executed_nodes))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import operator
 import time
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
@@ -83,6 +84,7 @@ class AsyncWorkflowEngine:
         self,
         workflow_input: WorkflowInput,
         approved_nodes: set[str] | None = None,
+        session_id: str | None = None,
     ) -> WorkflowResult:
         start = time.time()
         context = dict(workflow_input.context)
@@ -108,11 +110,15 @@ class AsyncWorkflowEngine:
                     llm_response = await self._llm.generate(prompt)
                     context[f"{node_id}_llm_response"] = llm_response
                 context[f"{node_id}_status"] = "done"
+                await self._emit_node_event(session_id, node_id, "ACTION", "done", context)
 
             elif node.type == NodeType.CONDITION:
                 executed.append(node_id)
                 result = self._evaluate_condition(node, context)
                 context[f"{node_id}_result"] = result
+                await self._emit_node_event(
+                    session_id, node_id, "CONDITION", "true" if result else "false", context
+                )
 
                 if result:
                     if node.false_next:
@@ -128,13 +134,16 @@ class AsyncWorkflowEngine:
             elif node.type == NodeType.HANDOFF:
                 executed.append(node_id)
                 outcome = f"handoff:{node.metadata.label or node_id}"
+                await self._emit_node_event(session_id, node_id, "HANDOFF", outcome, context)
 
             elif node.type == NodeType.APPROVAL:
                 executed.append(node_id)
                 if node_id in _approved:
                     context[f"{node_id}_status"] = "approved"
+                    await self._emit_node_event(session_id, node_id, "APPROVAL", "approved", context)
                 else:
                     outcome = f"pending_approval:{node.metadata.label or node_id}"
+                    await self._emit_node_event(session_id, node_id, "APPROVAL", "pending_approval", context)
                     break
 
         elapsed = time.time() - start
@@ -158,6 +167,29 @@ class AsyncWorkflowEngine:
             final_outcome=outcome,
             context=context,
         )
+
+    async def _emit_node_event(
+        self,
+        session_id: str | None,
+        node_id: str,
+        node_type: str,
+        outcome: str,
+        context: dict[str, Any],
+    ) -> None:
+        if self._event_bus and session_id:
+            from cen.telemetry.events import NodeExecutedEvent
+
+            await self._event_bus.emit(
+                NodeExecutedEvent(
+                    session_id=session_id,
+                    module=self.module_name,
+                    node_id=node_id,
+                    node_type=node_type,
+                    outcome=outcome,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    context=context,
+                )
+            )
 
     def _collect_exclusive_branch(
         self, skip_root: str, keep_root: str, skip_set: set[str]

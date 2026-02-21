@@ -106,3 +106,14 @@ class ReadyResponse(BaseModel):
     modules_loaded: List[str]
     llm_backend: str
     llm_available: bool
+
+
+class AuditEntry(BaseModel):
+    id: int
+    session_id: str
+    module: str
+    node_id: str
+    node_type: str
+    outcome: str
+    context: Dict[str, Any]
+    timestamp: str

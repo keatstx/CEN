@@ -37,7 +37,7 @@ async def execute_workflow(
         payload = WorkflowInput(module_name=payload.module_name, context=merged)
         approved = set(session.approved_nodes)
 
-    result = await engine.execute(payload, approved_nodes=approved)
+    result = await engine.execute(payload, approved_nodes=approved, session_id=session_id)
 
     # Persist result back to session
     if session_id is not None:

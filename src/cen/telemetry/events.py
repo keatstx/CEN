@@ -26,3 +26,22 @@ class AOPLoadedEvent:
     module: str
     node_count: int
     edge_count: int
+
+
+@dataclass(frozen=True)
+class NodeExecutedEvent:
+    session_id: str
+    module: str
+    node_id: str
+    node_type: str
+    outcome: str
+    timestamp: str
+    context: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ApprovalEvent:
+    session_id: str
+    module: str
+    node_id: str
+    timestamp: str

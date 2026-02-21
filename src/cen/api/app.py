@@ -12,11 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from cen.config import Settings
 from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
+from cen.core.audit_store import AuditStore
 from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
 from cen.privacy.pii_scrubber import create_scrubber
 from cen.telemetry.bus import AsyncEventBus
-from cen.telemetry.handlers import TelemetryHandlers
+from cen.telemetry.handlers import AuditHandlers, TelemetryHandlers
 from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
@@ -55,8 +56,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _configure_structlog(settings)
 
-    # Session store — created here, initialized/closed via lifespan
+    # Session store + audit store — created here, initialized/closed via lifespan
     session_store = SessionStore(settings.db_path)
+    audit_store = AuditStore(settings.db_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -64,7 +66,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.db_path != ":memory:":
             Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
         await session_store.initialize()
+        await audit_store.initialize()
         yield
+        await audit_store.close()
         await session_store.close()
 
     app = FastAPI(
@@ -93,6 +97,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     scrubber = create_scrubber(settings.pii_backend)
     telemetry = TelemetryHandlers(scrubber)
     telemetry.register(event_bus)
+    audit_handlers = AuditHandlers(audit_store, scrubber)
+    audit_handlers.register(event_bus)
 
     # Load modules
     engines: dict[str, AsyncWorkflowEngine] = {}
@@ -113,7 +119,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
 
     # Dependency injection
-    init_dependencies(settings, engines, llm_instance, session_store=session_store)
+    init_dependencies(
+        settings, engines, llm_instance,
+        session_store=session_store,
+        audit_store=audit_store,
+        event_bus=event_bus,
+    )
 
     # Routes
     app.include_router(workflows.router)

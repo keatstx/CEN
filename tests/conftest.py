@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from cen.config import Settings
 from cen.api.app import create_app
-from cen.api.dependencies import get_session_store
+from cen.api.dependencies import get_audit_store, get_session_store
 
 
 @pytest.fixture()
@@ -22,10 +22,13 @@ def app(test_settings: Settings):
 
 @pytest.fixture()
 async def client(app) -> AsyncClient:
-    # Manually initialize the session store (lifespan doesn't run in test transport)
+    # Manually initialize the session store and audit store (lifespan doesn't run in test transport)
     store = get_session_store()
     await store.initialize()
+    audit_store = get_audit_store()
+    await audit_store.initialize()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    await audit_store.close()
     await store.close()
