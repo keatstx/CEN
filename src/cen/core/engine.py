@@ -79,11 +79,16 @@ class AsyncWorkflowEngine:
         except (TypeError, ValueError):
             return op_func(actual, value)
 
-    async def execute(self, workflow_input: WorkflowInput) -> WorkflowResult:
+    async def execute(
+        self,
+        workflow_input: WorkflowInput,
+        approved_nodes: set[str] | None = None,
+    ) -> WorkflowResult:
         start = time.time()
         context = dict(workflow_input.context)
         executed: list[str] = []
         outcome = "completed"
+        _approved = approved_nodes or set()
 
         sorted_nodes = list(nx.topological_sort(self.graph))
         skip_set: set[str] = set()
@@ -123,6 +128,14 @@ class AsyncWorkflowEngine:
             elif node.type == NodeType.HANDOFF:
                 executed.append(node_id)
                 outcome = f"handoff:{node.metadata.label or node_id}"
+
+            elif node.type == NodeType.APPROVAL:
+                executed.append(node_id)
+                if node_id in _approved:
+                    context[f"{node_id}_status"] = "approved"
+                else:
+                    outcome = f"pending_approval:{node.metadata.label or node_id}"
+                    break
 
         elapsed = time.time() - start
 

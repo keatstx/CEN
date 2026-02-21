@@ -33,5 +33,16 @@ class SessionNotFoundError(CENError):
         super().__init__(f"Session '{session_id}' not found.")
 
 
+class ApprovalNotPendingError(CENError):
+    """Raised when trying to approve a session not in AWAITING_APPROVAL status."""
+
+    def __init__(self, session_id: str, current_status: str):
+        self.session_id = session_id
+        self.current_status = current_status
+        super().__init__(
+            f"Session '{session_id}' is not awaiting approval (current status: {current_status})."
+        )
+
+
 class LLMUnavailableError(CENError):
     """Raised when the LLM backend is unreachable and no fallback succeeds."""

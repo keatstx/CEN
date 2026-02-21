@@ -94,10 +94,11 @@ class TestExecuteWithSession:
         )
         assert resp.status_code == 200
 
-        # Verify session was updated
+        # Verify session was updated — stops at approval gate
         session = await client.get(f"/sessions/{sid}")
         data = session.json()
-        assert data["status"] != "ACTIVE" or len(data["executed_nodes"]) > 0
+        assert data["status"] == "AWAITING_APPROVAL"
+        assert len(data["executed_nodes"]) > 0
         assert "income_fpl_percent" in data["context"]
 
     async def test_execute_merges_context(self, client: AsyncClient):
@@ -147,3 +148,59 @@ class TestExecuteWithSession:
         )
         assert resp.status_code == 200
         assert resp.json()["module_name"] == "charity_care_navigator"
+
+
+class TestApprovalFlow:
+    async def test_full_approval_lifecycle(self, client: AsyncClient):
+        # Create session
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+
+        # Execute — should stop at counselor_approval
+        resp = await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["final_outcome"].startswith("pending_approval:")
+        assert "counselor_approval" in data["executed_nodes"]
+        assert "handoff_counselor" not in data["executed_nodes"]
+
+        # Verify session is AWAITING_APPROVAL
+        session_resp = await client.get(f"/sessions/{sid}")
+        session_data = session_resp.json()
+        assert session_data["status"] == "AWAITING_APPROVAL"
+        assert session_data["pending_node"] == "counselor_approval"
+
+        # Approve
+        approve_resp = await client.post(f"/sessions/{sid}/approve")
+        assert approve_resp.status_code == 200
+        approve_data = approve_resp.json()
+        assert approve_data["final_outcome"].startswith("handoff:")
+        assert "handoff_counselor" in approve_data["executed_nodes"]
+
+        # Verify session is now COMPLETED
+        final = await client.get(f"/sessions/{sid}")
+        final_data = final.json()
+        assert final_data["status"] == "COMPLETED"
+        assert "counselor_approval" in final_data["approved_nodes"]
+
+    async def test_approve_non_awaiting_session_returns_409(self, client: AsyncClient):
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        # Session is ACTIVE, not AWAITING_APPROVAL
+        resp = await client.post(f"/sessions/{sid}/approve")
+        assert resp.status_code == 409
+
+    async def test_approve_nonexistent_session_returns_404(self, client: AsyncClient):
+        resp = await client.post("/sessions/does_not_exist/approve")
+        assert resp.status_code == 404

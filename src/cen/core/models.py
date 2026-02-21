@@ -12,6 +12,7 @@ class NodeType(str, Enum):
     ACTION = "ACTION"
     CONDITION = "CONDITION"
     HANDOFF = "HANDOFF"
+    APPROVAL = "APPROVAL"
 
 
 class NodeMetadata(BaseModel):
@@ -59,6 +60,7 @@ class WorkflowResult(BaseModel):
 
 class SessionStatus(str, Enum):
     ACTIVE = "ACTIVE"
+    AWAITING_APPROVAL = "AWAITING_APPROVAL"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -69,6 +71,8 @@ class Session(BaseModel):
     status: SessionStatus = SessionStatus.ACTIVE
     context: Dict[str, Any] = Field(default_factory=dict)
     executed_nodes: List[str] = Field(default_factory=list)
+    pending_node: Optional[str] = None
+    approved_nodes: List[str] = Field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
 

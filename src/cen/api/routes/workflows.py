@@ -27,6 +27,7 @@ async def execute_workflow(
         raise ModuleNotFoundError(payload.module_name, list(engines.keys()))
 
     # If session_id provided, load and merge context
+    approved: set[str] = set()
     if session_id is not None:
         session = await store.get(session_id)
         if session is None:
@@ -34,19 +35,39 @@ async def execute_workflow(
         # Merge: saved context as base, incoming overrides
         merged = {**session.context, **payload.context}
         payload = WorkflowInput(module_name=payload.module_name, context=merged)
+        approved = set(session.approved_nodes)
 
-    result = await engine.execute(payload)
+    result = await engine.execute(payload, approved_nodes=approved)
 
     # Persist result back to session
     if session_id is not None:
         combined_nodes = list(dict.fromkeys(session.executed_nodes + result.executed_nodes))
-        status = SessionStatus.COMPLETED if result.final_outcome.startswith("handoff:") else SessionStatus.ACTIVE
-        await store.update(
-            session_id,
-            context=result.context,
-            executed_nodes=combined_nodes,
-            status=status,
-        )
+        if result.final_outcome.startswith("pending_approval:"):
+            # Extract pending node — last executed node is the approval gate
+            pending = result.executed_nodes[-1] if result.executed_nodes else None
+            await store.update(
+                session_id,
+                context=result.context,
+                executed_nodes=combined_nodes,
+                status=SessionStatus.AWAITING_APPROVAL,
+                pending_node=pending,
+            )
+        elif result.final_outcome.startswith("handoff:"):
+            await store.update(
+                session_id,
+                context=result.context,
+                executed_nodes=combined_nodes,
+                status=SessionStatus.COMPLETED,
+                pending_node=None,
+            )
+        else:
+            await store.update(
+                session_id,
+                context=result.context,
+                executed_nodes=combined_nodes,
+                status=SessionStatus.ACTIVE,
+                pending_node=None,
+            )
 
     return result
 

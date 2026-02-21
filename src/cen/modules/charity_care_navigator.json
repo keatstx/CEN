@@ -47,6 +47,15 @@
       }
     },
     {
+      "id": "counselor_approval",
+      "type": "APPROVAL",
+      "metadata": {
+        "label": "Counselor Approval",
+        "description": "A counselor must approve the application before the case is handed off.",
+        "params": {}
+      }
+    },
+    {
       "id": "handoff_counselor",
       "type": "HANDOFF",
       "metadata": {
@@ -60,7 +69,8 @@
     { "source": "income_verification", "target": "fpl_check", "label": "verified" },
     { "source": "fpl_check", "target": "auto_app", "label": "income < 200% FPL" },
     { "source": "fpl_check", "target": "debt_cancellation", "label": "income >= 200% FPL" },
-    { "source": "auto_app", "target": "handoff_counselor", "label": "app submitted" },
-    { "source": "debt_cancellation", "target": "handoff_counselor", "label": "audit complete" }
+    { "source": "auto_app", "target": "counselor_approval", "label": "app submitted" },
+    { "source": "debt_cancellation", "target": "counselor_approval", "label": "audit complete" },
+    { "source": "counselor_approval", "target": "handoff_counselor", "label": "approved" }
   ]
 }

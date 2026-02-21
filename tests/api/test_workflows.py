@@ -20,6 +20,9 @@ class TestExecuteEndpoint:
         assert data["module_name"] == "charity_care_navigator"
         assert "auto_app" in data["executed_nodes"]
         assert "debt_cancellation" not in data["executed_nodes"]
+        # Stops at approval gate instead of reaching handoff
+        assert "counselor_approval" in data["executed_nodes"]
+        assert data["final_outcome"].startswith("pending_approval:")
 
     async def test_execute_missing_module(self, client: AsyncClient):
         resp = await client.post(
@@ -40,6 +43,9 @@ class TestExecuteEndpoint:
         data = resp.json()
         assert "debt_cancellation" in data["executed_nodes"]
         assert "auto_app" not in data["executed_nodes"]
+        # Stops at approval gate
+        assert "counselor_approval" in data["executed_nodes"]
+        assert data["final_outcome"].startswith("pending_approval:")
 
 
 class TestUpdateAOP:

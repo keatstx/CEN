@@ -98,3 +98,55 @@ class TestExecute:
         assert nodes.index("a") < nodes.index("b")
         assert nodes.index("b") < nodes.index("c_true")
         assert nodes.index("c_true") < nodes.index("d")
+
+
+def _approval_aop() -> AOPDefinition:
+    """Linear: action -> approval_gate -> handoff."""
+    return AOPDefinition(
+        module_name="approval_test",
+        nodes=[
+            AOPNode(id="step1", type=NodeType.ACTION),
+            AOPNode(
+                id="gate",
+                type=NodeType.APPROVAL,
+                metadata={"label": "Manager Approval", "description": "", "params": {}},
+            ),
+            AOPNode(id="final", type=NodeType.HANDOFF, metadata={"label": "Done"}),
+        ],
+        edges=[
+            AOPEdge(source="step1", target="gate"),
+            AOPEdge(source="gate", target="final"),
+        ],
+    )
+
+
+class TestApprovalNode:
+    @pytest.fixture()
+    def engine(self) -> AsyncWorkflowEngine:
+        e = AsyncWorkflowEngine()
+        e.load_aop(_approval_aop())
+        return e
+
+    async def test_stops_at_unapproved_gate(self, engine: AsyncWorkflowEngine):
+        result = await engine.execute(
+            WorkflowInput(module_name="approval_test", context={})
+        )
+        assert result.final_outcome.startswith("pending_approval:")
+        assert "gate" in result.executed_nodes
+        assert "final" not in result.executed_nodes
+
+    async def test_passes_through_approved_gate(self, engine: AsyncWorkflowEngine):
+        result = await engine.execute(
+            WorkflowInput(module_name="approval_test", context={}),
+            approved_nodes={"gate"},
+        )
+        assert result.final_outcome.startswith("handoff:")
+        assert "gate" in result.executed_nodes
+        assert "final" in result.executed_nodes
+
+    async def test_approved_gate_sets_status_in_context(self, engine: AsyncWorkflowEngine):
+        result = await engine.execute(
+            WorkflowInput(module_name="approval_test", context={}),
+            approved_nodes={"gate"},
+        )
+        assert result.context["gate_status"] == "approved"

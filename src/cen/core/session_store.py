@@ -28,6 +28,8 @@ class SessionStore:
                 status TEXT NOT NULL DEFAULT 'ACTIVE',
                 context TEXT NOT NULL DEFAULT '{}',
                 executed_nodes TEXT NOT NULL DEFAULT '[]',
+                pending_node TEXT,
+                approved_nodes TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -54,8 +56,9 @@ class SessionStore:
         assert self._db is not None
         await self._db.execute(
             """
-            INSERT INTO sessions (id, module_name, status, context, executed_nodes, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (id, module_name, status, context, executed_nodes,
+                                  pending_node, approved_nodes, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.id,
@@ -63,6 +66,8 @@ class SessionStore:
                 session.status.value,
                 json.dumps(session.context),
                 json.dumps(session.executed_nodes),
+                session.pending_node,
+                json.dumps(session.approved_nodes),
                 session.created_at,
                 session.updated_at,
             ),
@@ -85,7 +90,7 @@ class SessionStore:
         if existing is None:
             return None
 
-        allowed = {"context", "status", "executed_nodes"}
+        allowed = {"context", "status", "executed_nodes", "pending_node", "approved_nodes"}
         updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
         if not updates:
             return existing
@@ -95,7 +100,7 @@ class SessionStore:
         params: list = []
         for key, value in updates.items():
             set_clauses.append(f"{key} = ?")
-            if key in ("context", "executed_nodes"):
+            if key in ("context", "executed_nodes", "approved_nodes"):
                 params.append(json.dumps(value))
             elif key == "status":
                 params.append(value.value if isinstance(value, SessionStatus) else value)
@@ -143,6 +148,8 @@ class SessionStore:
             status=SessionStatus(row["status"]),
             context=json.loads(row["context"]),
             executed_nodes=json.loads(row["executed_nodes"]),
+            pending_node=row["pending_node"],
+            approved_nodes=json.loads(row["approved_nodes"]),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
