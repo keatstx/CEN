@@ -117,3 +117,11 @@ class AuditEntry(BaseModel):
     outcome: str
     context: Dict[str, Any]
     timestamp: str
+    record_hash: str = ""
+
+
+class AuditVerification(BaseModel):
+    is_valid: bool
+    last_verified_id: int
+    total_records: int
+    verified_at: str

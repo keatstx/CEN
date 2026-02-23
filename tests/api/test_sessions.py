@@ -298,3 +298,148 @@ class TestAuditTrail:
         assert any(o.startswith("handoff:") for o in outcomes)
         # The approval node should appear in the trail
         assert "counselor_approval" in node_ids
+
+    async def test_audit_filter_by_node_type(self, client: AsyncClient):
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        # Filter to only APPROVAL type
+        resp = await client.get(f"/sessions/{sid}/audit", params={"node_type": "APPROVAL"})
+        assert resp.status_code == 200
+        entries = resp.json()
+        assert all(e["node_type"] == "APPROVAL" for e in entries)
+
+    async def test_audit_pagination(self, client: AsyncClient):
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        # Paginate
+        resp = await client.get(f"/sessions/{sid}/audit", params={"limit": 1, "offset": 0})
+        assert resp.status_code == 200
+        page1 = resp.json()
+        assert len(page1) == 1
+
+        resp2 = await client.get(f"/sessions/{sid}/audit", params={"limit": 1, "offset": 1})
+        page2 = resp2.json()
+        assert len(page2) == 1
+        assert page1[0]["id"] != page2[0]["id"]
+
+    async def test_audit_entries_have_record_hash(self, client: AsyncClient):
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        resp = await client.get(f"/sessions/{sid}/audit")
+        entries = resp.json()
+        for entry in entries:
+            assert "record_hash" in entry
+            assert len(entry["record_hash"]) == 64
+
+
+class TestAuditVerify:
+    async def test_verify_valid_chain(self, client: AsyncClient):
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        resp = await client.get(f"/sessions/{sid}/audit/verify")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_valid"] is True
+        assert data["total_records"] > 0
+        assert data["last_verified_id"] > 0
+        assert "verified_at" in data
+
+    async def test_verify_nonexistent_session_returns_404(self, client: AsyncClient):
+        resp = await client.get("/sessions/does_not_exist/audit/verify")
+        assert resp.status_code == 404
+
+
+class TestAuditExport:
+    async def _create_and_execute(self, client: AsyncClient) -> str:
+        create = await client.post(
+            "/sessions", json={"module_name": "charity_care_navigator"}
+        )
+        sid = create.json()["id"]
+        await client.post(
+            "/execute",
+            params={"session_id": sid},
+            json={
+                "module_name": "charity_care_navigator",
+                "context": {"income_fpl_percent": 150},
+            },
+        )
+        return sid
+
+    async def test_export_json(self, client: AsyncClient):
+        sid = await self._create_and_execute(client)
+        resp = await client.get(f"/sessions/{sid}/audit/export", params={"format": "json"})
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+        assert "attachment" in resp.headers["content-disposition"]
+        data = resp.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+    async def test_export_csv(self, client: AsyncClient):
+        sid = await self._create_and_execute(client)
+        resp = await client.get(f"/sessions/{sid}/audit/export", params={"format": "csv"})
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+        assert "attachment" in resp.headers["content-disposition"]
+        lines = resp.text.strip().split("\n")
+        assert len(lines) > 1  # Header + data rows
+
+    async def test_export_default_is_json(self, client: AsyncClient):
+        sid = await self._create_and_execute(client)
+        resp = await client.get(f"/sessions/{sid}/audit/export")
+        assert resp.status_code == 200
+        assert "application/json" in resp.headers["content-type"]
+
+    async def test_export_nonexistent_session_returns_404(self, client: AsyncClient):
+        resp = await client.get("/sessions/does_not_exist/audit/export")
+        assert resp.status_code == 404
+
+    async def test_export_with_filters(self, client: AsyncClient):
+        sid = await self._create_and_execute(client)
+        resp = await client.get(
+            f"/sessions/{sid}/audit/export",
+            params={"format": "json", "node_type": "ACTION"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(e["node_type"] == "ACTION" for e in data)

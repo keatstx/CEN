@@ -7,7 +7,7 @@
 | Persistent Storage | Saves progress if the app crashes mid-workflow | Medium (SQLite) | Done |
 | Schema Validation | Ensures LLM output is actually a number, not a sentence | Easy (Pydantic) | Done |
 | Concurrency Limits | Prevents the DAG from running 5 LLMs at once | Hard (Semaphores) | Not started |
-| Logging/Audit Trail | Essential for "No Surprises Act" legal compliance | Easy (AOP Aspect) | Partial |
+| Logging/Audit Trail | Essential for "No Surprises Act" legal compliance | Easy (AOP Aspect) | Done |
 
 ### Persistent Storage (Done)
 - SQLite-backed `SessionStore` via `aiosqlite` (`src/cen/core/session_store.py`)
@@ -22,10 +22,15 @@
 - No semaphore or throttling on parallel LLM calls
 - Needs implementation to prevent resource exhaustion
 
-### Logging/Audit Trail (Partial)
+### Logging/Audit Trail (Done)
 - `structlog` for structured logging
 - `AsyncEventBus` emits `WorkflowCompletedEvent` with outcome, latency, and context
-- Not yet a full compliance-grade audit trail for legal requirements
+- SHA-256 hash chain on `AuditStore` — every record cryptographically linked to predecessor for tamper detection
+- `verify_chain()` method walks records and recomputes hashes to detect tampering
+- `query()` method with filters: `node_type`, `outcome`, `start_time`/`end_time`, `limit`/`offset`
+- `GET /{session_id}/audit/verify` endpoint returns chain verification status
+- `GET /{session_id}/audit/export?format=json|csv` endpoint with Content-Disposition attachment header
+- JSON and CSV export via pure functions in `audit_export.py`
 
 ---
 
