@@ -58,6 +58,15 @@ def create_language_model(settings: Settings) -> FallbackLanguageModel:
         from cen.llm.gguf import GGUFLanguageModel
 
         primary: LanguageModel = GGUFLanguageModel(settings.gguf_model_path)
+    elif settings.llm_backend == "api":
+        from cen.llm.openai_compat import OpenAICompatLanguageModel
+
+        primary = OpenAICompatLanguageModel(
+            base_url=settings.llm_api_base,
+            model=settings.llm_model,
+            api_key=settings.llm_api_key,
+            timeout=settings.llm_timeout,
+        )
     else:
         primary = mock
 

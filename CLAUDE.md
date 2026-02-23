@@ -9,7 +9,7 @@ AI Concierge platform for No Surprises Act compliance. Executes AOP/DAG workflow
 | API | FastAPI (Python 3.9+) |
 | Database | SQLite via aiosqlite |
 | Workflow Engine | NetworkX DAG execution |
-| LLM | Pluggable (mock / GGUF) |
+| LLM | Pluggable (mock / GGUF / OpenAI-compatible API) |
 | Privacy | PII scrubbing (regex / Presidio) |
 | Logging | structlog |
 | Frontend | React (Vite, port 5173) |
@@ -52,7 +52,10 @@ Environment variables prefixed with `CEN_`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CEN_LLM_BACKEND` | `mock` | LLM backend (`mock` or `gguf`) |
+| `CEN_LLM_BACKEND` | `mock` | LLM backend (`mock`, `gguf`, or `api`) |
+| `CEN_LLM_API_BASE` | `http://localhost:11434/v1` | OpenAI-compatible API base URL |
+| `CEN_LLM_API_KEY` | *(empty)* | API key (empty = no auth, for local providers) |
+| `CEN_LLM_MODEL` | `phi3:mini` | Model name sent to the API |
 | `CEN_DB_PATH` | `./data/cen.db` | SQLite database path |
 | `CEN_PII_BACKEND` | `regex` | PII scrubber (`regex` or `presidio`) |
 | `CEN_LOG_RENDERER` | `console` | Log format (`console` or `json`) |
