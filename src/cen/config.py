@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Concurrency
+    llm_max_concurrency: int = 2
+
     # Logging
     log_renderer: Literal["json", "console"] = "console"
 

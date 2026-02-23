@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import operator
 import time
 from datetime import datetime, timezone
@@ -37,12 +38,14 @@ class AsyncWorkflowEngine:
         self,
         llm: LanguageModel | None = None,
         event_bus: AsyncEventBus | None = None,
+        llm_semaphore: asyncio.Semaphore | None = None,
     ):
         self.graph = nx.DiGraph()
         self.nodes: dict[str, AOPNode] = {}
         self.module_name: str = ""
         self._llm = llm
         self._event_bus = event_bus
+        self._llm_semaphore = llm_semaphore
 
     def load_aop(self, aop: AOPDefinition) -> None:
         self.graph.clear()
@@ -107,7 +110,23 @@ class AsyncWorkflowEngine:
                 llm_prompt = node.metadata.params.get("llm_prompt")
                 if llm_prompt and self._llm:
                     prompt = llm_prompt.format(**context) if "{" in llm_prompt else llm_prompt
-                    llm_response = await self._llm.generate(prompt)
+                    if self._llm_semaphore:
+                        t0 = time.monotonic()
+                        async with self._llm_semaphore:
+                            wait_time = time.monotonic() - t0
+                            if wait_time > 0.001 and self._event_bus and session_id:
+                                from cen.telemetry.events import LLMThrottledEvent
+
+                                await self._event_bus.emit(
+                                    LLMThrottledEvent(
+                                        session_id=session_id,
+                                        node_id=node_id,
+                                        wait_time=wait_time,
+                                    )
+                                )
+                            llm_response = await self._llm.generate(prompt)
+                    else:
+                        llm_response = await self._llm.generate(prompt)
                     context[f"{node_id}_llm_response"] = llm_response
                 context[f"{node_id}_status"] = "done"
                 await self._emit_node_event(session_id, node_id, "ACTION", "done", context)

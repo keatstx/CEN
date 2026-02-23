@@ -10,6 +10,7 @@ from cen.telemetry.events import (
     AOPLoadedEvent,
     ApprovalEvent,
     LLMFallbackEvent,
+    LLMThrottledEvent,
     NodeExecutedEvent,
     WorkflowCompletedEvent,
 )
@@ -30,6 +31,7 @@ class TelemetryHandlers:
         bus.subscribe(WorkflowCompletedEvent, self.on_workflow_completed)
         bus.subscribe(LLMFallbackEvent, self.on_llm_fallback)
         bus.subscribe(AOPLoadedEvent, self.on_aop_loaded)
+        bus.subscribe(LLMThrottledEvent, self.on_llm_throttled)
 
     async def on_workflow_completed(self, event: WorkflowCompletedEvent) -> None:
         sanitized = sanitize_context(event.context, self._scrubber)
@@ -55,6 +57,14 @@ class TelemetryHandlers:
             module=event.module,
             nodes=event.node_count,
             edges=event.edge_count,
+        )
+
+    async def on_llm_throttled(self, event: LLMThrottledEvent) -> None:
+        await logger.awarning(
+            "llm_throttled",
+            session_id=event.session_id,
+            node_id=event.node_id,
+            wait_time=f"{event.wait_time:.3f}s",
         )
 
 

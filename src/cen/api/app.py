@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -100,6 +101,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     audit_handlers = AuditHandlers(audit_store, scrubber)
     audit_handlers.register(event_bus)
 
+    # Shared semaphore for LLM concurrency
+    llm_semaphore = asyncio.Semaphore(settings.llm_max_concurrency)
+
     # Load modules
     engines: dict[str, AsyncWorkflowEngine] = {}
     modules_dir = Path(__file__).resolve().parent.parent / "modules"
@@ -107,7 +111,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for aop_file in sorted(modules_dir.glob("*.json")):
             try:
                 aop = load_aop_from_file(aop_file)
-                engine = AsyncWorkflowEngine(llm=llm_instance, event_bus=event_bus)
+                engine = AsyncWorkflowEngine(
+                    llm=llm_instance,
+                    event_bus=event_bus,
+                    llm_semaphore=llm_semaphore,
+                )
                 engine.load_aop(aop)
                 engines[aop.module_name] = engine
                 structlog.get_logger().info(

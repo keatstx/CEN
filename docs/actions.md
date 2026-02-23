@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Persistent Storage | Saves progress if the app crashes mid-workflow | Medium (SQLite) | Done |
 | Schema Validation | Ensures LLM output is actually a number, not a sentence | Easy (Pydantic) | Done |
-| Concurrency Limits | Prevents the DAG from running 5 LLMs at once | Hard (Semaphores) | Not started |
+| Concurrency Limits | Prevents the DAG from running 5 LLMs at once | Hard (Semaphores) | Done |
 | Logging/Audit Trail | Essential for "No Surprises Act" legal compliance | Easy (AOP Aspect) | Done |
 
 ### Persistent Storage (Done)
@@ -18,9 +18,12 @@
 - Pydantic models enforce structure on all inputs and outputs (`src/cen/core/models.py`)
 - `AOPNode`, `WorkflowInput`, `Session`, `WorkflowResult`, etc.
 
-### Concurrency Limits (Not started)
-- No semaphore or throttling on parallel LLM calls
-- Needs implementation to prevent resource exhaustion
+### Concurrency Limits (Done)
+- `asyncio.Semaphore` gates LLM calls across all engine instances
+- Configured via `CEN_LLM_MAX_CONCURRENCY` (default: 2)
+- Semaphore created once in `create_app()` and shared by all engines
+- `LLMThrottledEvent` emitted with wait time when calls queue up
+- `TelemetryHandlers` logs a warning on throttle events
 
 ### Logging/Audit Trail (Done)
 - `structlog` for structured logging

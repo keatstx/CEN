@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
+
 import pytest
 
 from cen.core.engine import AsyncWorkflowEngine
@@ -13,6 +16,8 @@ from cen.core.models import (
     NodeType,
     WorkflowInput,
 )
+from cen.telemetry.bus import AsyncEventBus
+from cen.telemetry.events import LLMThrottledEvent
 
 
 def _simple_aop() -> AOPDefinition:
@@ -150,3 +155,113 @@ class TestApprovalNode:
             approved_nodes={"gate"},
         )
         assert result.context["gate_status"] == "approved"
+
+
+# ---------------------------------------------------------------------------
+# Helpers for concurrency tests
+# ---------------------------------------------------------------------------
+
+def _llm_aop() -> AOPDefinition:
+    """Single action node with an LLM prompt."""
+    return AOPDefinition(
+        module_name="llm_test",
+        nodes=[
+            AOPNode(
+                id="llm_node",
+                type=NodeType.ACTION,
+                metadata={"label": "LLM call", "description": "", "params": {"llm_prompt": "hello"}},
+            ),
+        ],
+        edges=[],
+    )
+
+
+class _SlowLLM:
+    """Fake LLM that sleeps to simulate latency."""
+
+    def __init__(self, delay: float = 0.15):
+        self._delay = delay
+
+    async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+        await asyncio.sleep(self._delay)
+        return "response"
+
+    async def is_available(self) -> bool:
+        return True
+
+    @property
+    def backend_name(self) -> str:
+        return "slow_mock"
+
+
+# ---------------------------------------------------------------------------
+# Concurrency limit tests
+# ---------------------------------------------------------------------------
+
+class TestConcurrencyLimits:
+    async def test_semaphore_serializes_concurrent_calls(self):
+        """With Semaphore(1), two concurrent executions should run serially."""
+        sem = asyncio.Semaphore(1)
+        slow_llm = _SlowLLM(delay=0.15)
+
+        e1 = AsyncWorkflowEngine(llm=slow_llm, llm_semaphore=sem)
+        e1.load_aop(_llm_aop())
+        e2 = AsyncWorkflowEngine(llm=slow_llm, llm_semaphore=sem)
+        e2.load_aop(_llm_aop())
+
+        start = time.monotonic()
+        r1, r2 = await asyncio.gather(
+            e1.execute(WorkflowInput(module_name="llm_test", context={})),
+            e2.execute(WorkflowInput(module_name="llm_test", context={})),
+        )
+        elapsed = time.monotonic() - start
+
+        assert r1.context["llm_node_llm_response"] == "response"
+        assert r2.context["llm_node_llm_response"] == "response"
+        # Serialized: should take ~2x the single-call delay
+        assert elapsed >= 0.25
+
+    async def test_no_semaphore_backward_compat(self):
+        """Engine without semaphore still works (no regression)."""
+        slow_llm = _SlowLLM(delay=0.05)
+        engine = AsyncWorkflowEngine(llm=slow_llm)
+        engine.load_aop(_llm_aop())
+
+        result = await engine.execute(
+            WorkflowInput(module_name="llm_test", context={})
+        )
+        assert result.context["llm_node_llm_response"] == "response"
+
+    async def test_throttle_event_emitted(self):
+        """When the semaphore causes waiting, an LLMThrottledEvent is emitted."""
+        sem = asyncio.Semaphore(1)
+        bus = AsyncEventBus()
+        captured: list[LLMThrottledEvent] = []
+
+        async def capture(event: LLMThrottledEvent) -> None:
+            captured.append(event)
+
+        bus.subscribe(LLMThrottledEvent, capture)
+
+        slow_llm = _SlowLLM(delay=0.15)
+        e1 = AsyncWorkflowEngine(llm=slow_llm, event_bus=bus, llm_semaphore=sem)
+        e1.load_aop(_llm_aop())
+        e2 = AsyncWorkflowEngine(llm=slow_llm, event_bus=bus, llm_semaphore=sem)
+        e2.load_aop(_llm_aop())
+
+        await asyncio.gather(
+            e1.execute(
+                WorkflowInput(module_name="llm_test", context={}),
+                session_id="s1",
+            ),
+            e2.execute(
+                WorkflowInput(module_name="llm_test", context={}),
+                session_id="s2",
+            ),
+        )
+
+        # At least one of the two should have waited
+        assert len(captured) >= 1
+        evt = captured[0]
+        assert evt.node_id == "llm_node"
+        assert evt.wait_time > 0

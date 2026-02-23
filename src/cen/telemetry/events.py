@@ -40,6 +40,13 @@ class NodeExecutedEvent:
 
 
 @dataclass(frozen=True)
+class LLMThrottledEvent:
+    session_id: str
+    node_id: str
+    wait_time: float
+
+
+@dataclass(frozen=True)
 class ApprovalEvent:
     session_id: str
     module: str
