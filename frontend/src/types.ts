@@ -23,6 +23,18 @@ export interface WorkflowResult {
   context: Record<string, unknown>;
 }
 
+export interface Session {
+  id: string;
+  module_name: string;
+  status: "ACTIVE" | "AWAITING_APPROVAL" | "COMPLETED" | "FAILED";
+  context: Record<string, unknown>;
+  executed_nodes: string[];
+  pending_node: string | null;
+  approved_nodes: string[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LLMGenerateRequest {
   prompt: string;
   max_tokens?: number;
@@ -31,6 +43,39 @@ export interface LLMGenerateRequest {
 export interface LLMGenerateResponse {
   response: string;
   backend: string;
+}
+
+// --- AOP graph types (mirrors backend models) ---
+
+export interface AOPNodeMetadata {
+  label: string;
+  description: string;
+  params: Record<string, unknown>;
+}
+
+export interface AOPNode {
+  id: string;
+  type: "ACTION" | "CONDITION" | "HANDOFF" | "APPROVAL";
+  metadata: AOPNodeMetadata;
+  condition_field: string | null;
+  condition_operator: string | null;
+  condition_value: unknown;
+  true_next: string | null;
+  false_next: string | null;
+}
+
+export interface AOPEdge {
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface AOPDefinition {
+  module_name: string;
+  version: string;
+  description: string;
+  nodes: AOPNode[];
+  edges: AOPEdge[];
 }
 
 // --- Module field configuration ---

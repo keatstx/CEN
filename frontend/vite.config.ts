@@ -9,8 +9,10 @@ export default defineConfig({
       '/health': 'http://localhost:8000',
       '/ready': 'http://localhost:8000',
       '/execute': 'http://localhost:8000',
+      '/sessions': 'http://localhost:8000',
       '/update-aop': 'http://localhost:8000',
       '/tlm': 'http://localhost:8000',
+      '/modules': 'http://localhost:8000',
     },
   },
 })

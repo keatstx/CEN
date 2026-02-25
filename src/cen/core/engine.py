@@ -50,6 +50,7 @@ class AsyncWorkflowEngine:
     def load_aop(self, aop: AOPDefinition) -> None:
         self.graph.clear()
         self.nodes.clear()
+        self._aop = aop
         self.module_name = aop.module_name
 
         for node in aop.nodes:
