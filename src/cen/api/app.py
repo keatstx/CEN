@@ -144,7 +144,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(modules.router)
 
     # Serve frontend static files (production)
+    # Check relative path (local dev) then absolute path (Docker)
     static_dir = Path(__file__).resolve().parent.parent.parent.parent / "frontend" / "dist"
+    if not static_dir.exists():
+        static_dir = Path("/app/frontend/dist")
     if static_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="static")
 
