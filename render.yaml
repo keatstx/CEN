@@ -15,8 +15,8 @@ services:
       - key: CEN_CORS_ORIGINS
         value: '["https://cen-frontend.onrender.com"]'
 
-staticSites:
-  - name: cen-frontend
+  - type: static
+    name: cen-frontend
     buildCommand: cd frontend && npm install && VITE_API_URL=https://cen-api.onrender.com npm run build
     staticPublishPath: frontend/dist
     headers:
