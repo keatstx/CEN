@@ -1,14 +1,10 @@
 services:
   - type: web
     name: cen
-    runtime: python
+    runtime: docker
     plan: free
-    buildCommand: pip install . && cd frontend && npm install && npm run build
-    startCommand: uvicorn cen.api.app:create_app --factory --host 0.0.0.0 --port $PORT
     envVars:
       - key: CEN_LLM_BACKEND
         value: mock
       - key: CEN_DB_PATH
         value: /tmp/cen.db
-      - key: PYTHON_VERSION
-        value: "3.11"
