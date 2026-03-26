@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: cen-api
+    runtime: python
+    plan: free
+    buildCommand: pip install .
+    startCommand: uvicorn cen.api.app:create_app --factory --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: CEN_LLM_BACKEND
+        value: mock
+      - key: CEN_DB_PATH
+        value: /tmp/cen.db
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: CEN_CORS_ORIGINS
+        value: '["https://cen-frontend.onrender.com"]'
+
+  - type: web
+    name: cen-frontend
+    runtime: static
+    plan: free
+    buildCommand: cd frontend && npm install && VITE_API_URL=https://cen-api.onrender.com npm run build
+    staticPublishPath: frontend/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
