@@ -1,10 +1,10 @@
 const TYPE_STYLES: Record<string, string> = {
   ACTION:
-    "bg-[var(--color-blue-muted)] text-[var(--color-blue)] border-[var(--color-blue)]40",
+    "bg-[var(--color-blue-muted)] text-[var(--color-blue)] border-[var(--color-blue)]/25",
   CONDITION:
-    "bg-[var(--color-warning-muted)] text-[var(--color-warning)] border-[var(--color-warning)]40",
+    "bg-[var(--color-warning-muted)] text-[var(--color-warning)] border-[var(--color-warning)]/25",
   HANDOFF:
-    "bg-[var(--color-success-muted)] text-[var(--color-success)] border-[var(--color-success)]40",
+    "bg-[var(--color-success-muted)] text-[var(--color-success)] border-[var(--color-success)]/25",
 };
 
 interface Props {

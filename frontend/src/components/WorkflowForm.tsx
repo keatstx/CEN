@@ -4,10 +4,12 @@ import { MODULE_CONFIGS, type FieldConfig } from "../types";
 interface Props {
   moduleName: string;
   loading: boolean;
+  sessionStatus: "ACTIVE" | "AWAITING_APPROVAL" | "COMPLETED" | "FAILED" | null;
   onExecute: (context: Record<string, unknown>) => void;
+  onNewSession: () => void;
 }
 
-export default function WorkflowForm({ moduleName, loading, onExecute }: Props) {
+export default function WorkflowForm({ moduleName, loading, sessionStatus, onExecute, onNewSession }: Props) {
   const config = MODULE_CONFIGS[moduleName];
   const [values, setValues] = useState<Record<string, unknown>>({});
 
@@ -46,19 +48,30 @@ export default function WorkflowForm({ moduleName, loading, onExecute }: Props) 
           onChange={(v) => setValue(field.key, v)}
         />
       ))}
-      <button type="submit" disabled={loading}>
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Executing…
-          </span>
-        ) : (
-          "Execute Workflow"
-        )}
-      </button>
+      {sessionStatus === "COMPLETED" || sessionStatus === "FAILED" ? (
+        <button type="button" onClick={onNewSession}>
+          Start New Session
+        </button>
+      ) : (
+        <button
+          type="submit"
+          disabled={loading || sessionStatus === "AWAITING_APPROVAL"}
+        >
+          {loading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Executing…
+            </span>
+          ) : sessionStatus === "AWAITING_APPROVAL" ? (
+            "Awaiting Approval…"
+          ) : (
+            "Execute Workflow"
+          )}
+        </button>
+      )}
     </form>
   );
 }

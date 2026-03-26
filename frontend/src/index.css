@@ -1,30 +1,29 @@
 @import "tailwindcss";
 
 /* ============================================
-   CEN AI Concierge — Premium Dark UI
-   Inspired by Linear, Raycast, Vercel
+   CEN AI Concierge — Clean Light UI
    ============================================ */
 
 @theme {
-  --color-surface: #0a0a0f;
-  --color-surface-raised: #12121a;
-  --color-surface-overlay: #1a1a26;
-  --color-border: #ffffff0d;
-  --color-border-hover: #ffffff1a;
-  --color-text-primary: #e8e8ed;
-  --color-text-secondary: #8b8b9e;
-  --color-text-muted: #5a5a6e;
-  --color-accent: #6c5ce7;
-  --color-accent-hover: #7c6ef7;
-  --color-accent-glow: #6c5ce740;
-  --color-success: #00c896;
-  --color-success-muted: #00c89620;
-  --color-warning: #f5a623;
-  --color-warning-muted: #f5a62320;
-  --color-danger: #ff4757;
-  --color-danger-muted: #ff475720;
-  --color-blue: #4facfe;
-  --color-blue-muted: #4facfe20;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f8f9fb;
+  --color-surface-overlay: #f1f3f5;
+  --color-border: #e2e5ea;
+  --color-border-hover: #cdd1d8;
+  --color-text-primary: #1a1d23;
+  --color-text-secondary: #5c6370;
+  --color-text-muted: #8e95a2;
+  --color-accent: #5046e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-glow: #5046e530;
+  --color-success: #059669;
+  --color-success-muted: #05966912;
+  --color-warning: #d97706;
+  --color-warning-muted: #d9770612;
+  --color-danger: #dc2626;
+  --color-danger-muted: #dc262612;
+  --color-blue: #2563eb;
+  --color-blue-muted: #2563eb12;
 }
 
 * {
@@ -42,25 +41,12 @@ body {
   min-height: 100vh;
 }
 
-/* Subtle animated gradient background */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% -20%, #6c5ce715 0%, transparent 50%),
-    radial-gradient(ellipse 60% 40% at 80% 50%, #4facfe08 0%, transparent 50%),
-    radial-gradient(ellipse 50% 30% at 10% 80%, #00c89608 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-}
-
 #root {
   position: relative;
   z-index: 1;
 }
 
-/* ---- Card / Glass panels ---- */
+/* ---- Card panels ---- */
 .card {
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
@@ -71,7 +57,7 @@ body::before {
 
 .card:hover {
   border-color: var(--color-border-hover);
-  box-shadow: 0 0 0 1px var(--color-border-hover);
+  box-shadow: 0 1px 4px #0000000a;
 }
 
 /* ---- Typography helpers ---- */
@@ -108,7 +94,7 @@ textarea:focus {
 }
 
 select option {
-  background: var(--color-surface-raised);
+  background: var(--color-surface);
   color: var(--color-text-primary);
 }
 
@@ -119,7 +105,7 @@ input[type="checkbox"] {
 /* ---- Primary button ---- */
 button[type="submit"],
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-accent), #5a4bd1) !important;
+  background: var(--color-accent) !important;
   border: none !important;
   color: #fff !important;
   border-radius: 8px !important;
@@ -128,13 +114,13 @@ button[type="submit"],
   font-weight: 500 !important;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 0 20px var(--color-accent-glow);
+  box-shadow: 0 1px 3px #00000015;
 }
 
 button[type="submit"]:hover:not(:disabled),
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-accent-hover), #6c5ce7) !important;
-  box-shadow: 0 0 30px var(--color-accent-glow), 0 4px 12px #0003;
+  background: var(--color-accent-hover) !important;
+  box-shadow: 0 2px 8px #00000018;
   transform: translateY(-1px);
 }
 
@@ -165,7 +151,7 @@ label {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ffffff30;
+  background: #9ca3af;
 }
 
 /* ---- Keyframes ---- */
@@ -176,7 +162,7 @@ label {
 
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 4px var(--color-success); }
-  50% { box-shadow: 0 0 12px var(--color-success); }
+  50% { box-shadow: 0 0 10px var(--color-success); }
 }
 
 .animate-fade-in {

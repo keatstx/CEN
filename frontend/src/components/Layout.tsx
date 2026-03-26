@@ -15,7 +15,7 @@ export default function Layout({ ready, error, children }: Props) {
         <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text-primary)] flex items-center gap-2.5">
-              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-[var(--color-accent)] to-[#4facfe] text-white text-xs font-bold">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--color-accent)] text-white text-xs font-bold">
                 C
               </span>
               CEN AI Concierge
