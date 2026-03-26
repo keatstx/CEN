@@ -149,14 +149,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if not static_dir.exists():
         static_dir = Path("/app/frontend/dist")
     if static_dir.exists():
-        app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="static")
+        index_html = static_dir / "index.html"
 
-        @app.get("/{full_path:path}")
-        async def serve_spa(full_path: str):
-            """Serve React SPA for any non-API route."""
-            file_path = static_dir / full_path
-            if file_path.exists() and file_path.is_file():
-                return FileResponse(str(file_path))
-            return FileResponse(str(static_dir / "index.html"))
+        @app.get("/", include_in_schema=False)
+        async def serve_index():
+            return FileResponse(str(index_html))
+
+        # Mount full static dir last — catches assets and unknown paths
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="spa")
 
     return app
