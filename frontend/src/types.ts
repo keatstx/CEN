@@ -17,11 +17,22 @@ export interface WorkflowInput {
   context: Record<string, unknown>;
 }
 
+export interface InputField {
+  key: string;
+  label: string;
+  type: "text" | "number" | "currency" | "boolean" | "date" | "select" | "file";
+  required: boolean;
+  options?: { value: string; label: string }[];
+  description?: string;
+}
+
 export interface WorkflowResult {
   module_name: string;
   executed_nodes: string[];
   final_outcome: string;
   context: Record<string, unknown>;
+  pending_node?: string | null;
+  pending_input_fields?: InputField[] | null;
 }
 
 export interface Session {
@@ -33,6 +44,7 @@ export interface Session {
   context: Record<string, unknown>;
   executed_nodes: string[];
   pending_node: string | null;
+  pending_input_fields: InputField[] | null;
   approved_nodes: string[];
   owner_id: string | null;
   project_id: string | null;

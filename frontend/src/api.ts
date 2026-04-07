@@ -1,5 +1,6 @@
 import type {
   AOPDefinition,
+  Project,
   ReadyResponse,
   Session,
   WorkflowInput,
@@ -24,19 +25,68 @@ export function fetchReady(): Promise<ReadyResponse> {
   return request<ReadyResponse>("/ready");
 }
 
-export function createSession(
+// ── Cases (canonical name; /sessions remains as a legacy alias) ──
+
+export function createCase(
   module_name: string,
-  context?: Record<string, unknown>,
+  options?: {
+    context?: Record<string, unknown>;
+    name?: string;
+    project_id?: string;
+  },
 ): Promise<Session> {
-  return request<Session>("/sessions", {
+  return request<Session>("/cases", {
     method: "POST",
-    body: JSON.stringify({ module_name, context }),
+    body: JSON.stringify({
+      module_name,
+      context: options?.context,
+      name: options?.name,
+      project_id: options?.project_id,
+    }),
   });
 }
 
-export function getSession(id: string): Promise<Session> {
-  return request<Session>(`/sessions/${id}`);
+export function getCase(id: string): Promise<Session> {
+  return request<Session>(`/cases/${id}`);
 }
+
+export function listCases(filters?: {
+  module_name?: string;
+  project_id?: string;
+  limit?: number;
+}): Promise<Session[]> {
+  const params = new URLSearchParams();
+  if (filters?.module_name) params.set("module_name", filters.module_name);
+  if (filters?.project_id) params.set("project_id", filters.project_id);
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const qs = params.toString();
+  return request<Session[]>(`/cases${qs ? `?${qs}` : ""}`);
+}
+
+export function patchCase(
+  id: string,
+  body: { name?: string; context?: Record<string, unknown> },
+): Promise<Session> {
+  return request<Session>(`/cases/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function provideInput(
+  id: string,
+  inputs: Record<string, unknown>,
+): Promise<WorkflowResult> {
+  return request<WorkflowResult>(`/cases/${id}/provide_input`, {
+    method: "POST",
+    body: JSON.stringify({ inputs }),
+  });
+}
+
+// Legacy aliases retained for now — will be removed once App.tsx
+// migrates fully to the case-named methods.
+export const createSession = createCase;
+export const getSession = getCase;
 
 export function executeWorkflow(
   input: WorkflowInput,
@@ -50,8 +100,34 @@ export function executeWorkflow(
 }
 
 export function approveSession(id: string): Promise<WorkflowResult> {
-  return request<WorkflowResult>(`/sessions/${id}/approve`, {
+  return request<WorkflowResult>(`/cases/${id}/approve`, {
     method: "POST",
+  });
+}
+
+// ── Projects ──
+
+export function listProjects(limit = 50): Promise<Project[]> {
+  return request<Project[]>(`/projects?limit=${limit}`);
+}
+
+export function createProject(
+  name: string,
+  description = "",
+): Promise<Project> {
+  return request<Project>("/projects", {
+    method: "POST",
+    body: JSON.stringify({ name, description }),
+  });
+}
+
+export function patchProject(
+  id: string,
+  body: { name?: string; description?: string },
+): Promise<Project> {
+  return request<Project>(`/projects/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
   });
 }
 
