@@ -8,11 +8,18 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
-from cen.api.dependencies import get_audit_store, get_engines, get_event_bus, get_session_store
+from cen.api.dependencies import (
+    get_audit_store,
+    get_engines,
+    get_event_bus,
+    get_project_store,
+    get_session_store,
+)
 from cen.core.audit_export import export_csv, export_json
 from cen.core.audit_store import AuditStore
 from cen.core.exceptions import ApprovalNotPendingError, ModuleNotFoundError, SessionNotFoundError
 from cen.core.models import AuditEntry, AuditVerification, Session, SessionCreate, SessionStatus, SessionUpdate, WorkflowInput, WorkflowResult
+from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
 from cen.telemetry.bus import AsyncEventBus
 from cen.telemetry.events import ApprovalEvent
@@ -25,19 +32,45 @@ async def create_session(
     body: SessionCreate,
     engines: dict = Depends(get_engines),
     store: SessionStore = Depends(get_session_store),
+    project_store: ProjectStore = Depends(get_project_store),
 ):
     if body.module_name not in engines:
         raise ModuleNotFoundError(body.module_name, list(engines.keys()))
-    return await store.create(body.module_name, body.context or {})
+
+    # Pin module version on the case at creation time so future engine
+    # updates do not affect in-flight cases.
+    engine = engines[body.module_name]
+    aop = getattr(engine, "_aop", None)
+    module_version = getattr(aop, "version", "1.0") if aop is not None else "1.0"
+
+    # Resolve project_id: explicit if provided, otherwise the owner's
+    # default project (auto-created on first use). owner_id is None until
+    # auth lands; the unowned default is shared across the v1 single
+    # operator.
+    project_id = body.project_id
+    if project_id is None:
+        default_project = await project_store.get_or_create_default(owner_id=None)
+        project_id = default_project.id
+
+    return await store.create(
+        body.module_name,
+        body.context or {},
+        module_version=module_version,
+        name=body.name,
+        project_id=project_id,
+    )
 
 
 @router.get("", response_model=list[Session])
 async def list_sessions(
     module_name: Optional[str] = Query(default=None),
+    project_id: Optional[str] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     store: SessionStore = Depends(get_session_store),
 ) -> List[Session]:
-    return await store.list_sessions(module_name=module_name, limit=limit)
+    return await store.list_sessions(
+        module_name=module_name, project_id=project_id, limit=limit
+    )
 
 
 @router.get("/{session_id}", response_model=Session)

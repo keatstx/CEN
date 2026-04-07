@@ -16,6 +16,7 @@ from cen.config import Settings
 from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.audit_store import AuditStore
+from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
 from cen.privacy.pii_scrubber import create_scrubber
@@ -25,7 +26,7 @@ from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
 from cen.api.routes import health, llm, modules, workflows
-from cen.api.routes import sessions
+from cen.api.routes import projects, sessions
 
 logger = structlog.get_logger()
 
@@ -59,8 +60,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     _configure_structlog(settings)
 
-    # Session store + audit store — created here, initialized/closed via lifespan
+    # Session store + project store + audit store — created here, init/close via lifespan
     session_store = SessionStore(settings.db_path)
+    project_store = ProjectStore(settings.db_path)
     audit_store = AuditStore(settings.db_path)
 
     @asynccontextmanager
@@ -69,9 +71,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.db_path != ":memory:":
             Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
         await session_store.initialize()
+        await project_store.initialize()
         await audit_store.initialize()
         yield
         await audit_store.close()
+        await project_store.close()
         await session_store.close()
 
     app = FastAPI(
@@ -132,6 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     init_dependencies(
         settings, engines, llm_instance,
         session_store=session_store,
+        project_store=project_store,
         audit_store=audit_store,
         event_bus=event_bus,
     )
@@ -141,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(llm.router)
     app.include_router(health.router)
     app.include_router(sessions.router)
+    app.include_router(projects.router)
     app.include_router(modules.router)
 
     # Serve frontend static files (production)

@@ -10,6 +10,7 @@ from cen.config import Settings
 if TYPE_CHECKING:
     from cen.core.audit_store import AuditStore
     from cen.core.engine import AsyncWorkflowEngine
+    from cen.core.project_store import ProjectStore
     from cen.core.session_store import SessionStore
     from cen.llm.factory import FallbackLanguageModel
     from cen.telemetry.bus import AsyncEventBus
@@ -19,6 +20,7 @@ _settings: Settings | None = None
 _engines: dict[str, AsyncWorkflowEngine] = {}
 _llm: FallbackLanguageModel | None = None
 _session_store: SessionStore | None = None
+_project_store: ProjectStore | None = None
 _audit_store: AuditStore | None = None
 _event_bus: AsyncEventBus | None = None
 
@@ -28,14 +30,16 @@ def init_dependencies(
     engines: dict[str, AsyncWorkflowEngine],
     llm: FallbackLanguageModel,
     session_store: SessionStore | None = None,
+    project_store: ProjectStore | None = None,
     audit_store: AuditStore | None = None,
     event_bus: AsyncEventBus | None = None,
 ) -> None:
-    global _settings, _engines, _llm, _session_store, _audit_store, _event_bus
+    global _settings, _engines, _llm, _session_store, _project_store, _audit_store, _event_bus
     _settings = settings
     _engines = engines
     _llm = llm
     _session_store = session_store
+    _project_store = project_store
     _audit_store = audit_store
     _event_bus = event_bus
 
@@ -57,6 +61,11 @@ def get_llm() -> FallbackLanguageModel:
 def get_session_store() -> SessionStore:
     assert _session_store is not None
     return _session_store
+
+
+def get_project_store() -> ProjectStore:
+    assert _project_store is not None
+    return _project_store
 
 
 def get_audit_store() -> AuditStore:
