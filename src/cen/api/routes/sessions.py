@@ -25,7 +25,10 @@ from cen.core.session_store import SessionStore
 from cen.telemetry.bus import AsyncEventBus
 from cen.telemetry.events import ApprovalEvent
 
-router = APIRouter(prefix="/sessions", tags=["sessions"])
+# Router has no prefix — app.py mounts it twice, once at /sessions
+# (legacy) and once at /cases (the canonical name going forward, per
+# CLAUDE.md §7). Both paths share the same handlers and the same store.
+router = APIRouter(tags=["sessions"])
 
 
 @router.post("", response_model=Session, status_code=201)

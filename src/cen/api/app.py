@@ -172,7 +172,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(llm.router)
     app.include_router(health.router)
     app.include_router(auth.router)
-    app.include_router(sessions.router)
+    # Mount sessions router twice — /sessions (legacy) and /cases
+    # (canonical, per CLAUDE.md §7). Same handlers, same store.
+    app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+    app.include_router(sessions.router, prefix="/cases", tags=["cases"])
     app.include_router(projects.router)
     app.include_router(modules.router)
 
