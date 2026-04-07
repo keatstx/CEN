@@ -10,6 +10,7 @@ from cen.api.app import create_app
 from cen.api.dependencies import (
     get_artifact_store,
     get_audit_store,
+    get_faq_store,
     get_project_store,
     get_session_store,
 )
@@ -42,9 +43,12 @@ async def client(app) -> AsyncClient:
     await audit_store.initialize()
     artifact_store = get_artifact_store()
     await artifact_store.initialize()
+    faq_store = get_faq_store()
+    await faq_store.initialize()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    await faq_store.close()
     await artifact_store.close()
     await audit_store.close()
     await project_store.close()

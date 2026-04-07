@@ -167,6 +167,50 @@ class ProvideInputRequest(BaseModel):
     inputs: Dict[str, Any] = Field(default_factory=dict)
 
 
+class FAQ(BaseModel):
+    """One Q+A pair in the concierge knowledge base.
+
+    FAQs are scoped by `module_name` (workflow-specific FAQs) or
+    `project_id` (case-specific FAQs) — when both are NULL the FAQ is
+    global. The concierge retrieval prefers more-specific matches.
+    """
+
+    id: str
+    module_name: Optional[str] = None
+    project_id: Optional[str] = None
+    question: str
+    answer: str
+    source_filename: str = ""
+    owner_id: Optional[str] = None
+    created_at: str = ""
+
+
+class FAQCreate(BaseModel):
+    question: str
+    answer: str
+    module_name: Optional[str] = None
+    project_id: Optional[str] = None
+    source_filename: str = ""
+
+
+class ConciergeQuery(BaseModel):
+    question: str
+    case_id: Optional[str] = None
+    current_node_id: Optional[str] = None
+
+
+class ConciergeCitation(BaseModel):
+    faq_id: str
+    question: str
+    score: float
+
+
+class ConciergeResponse(BaseModel):
+    answer: str
+    mode: str  # "lookup" or "format"
+    citations: List[ConciergeCitation] = Field(default_factory=list)
+
+
 class Artifact(BaseModel):
     """Metadata for a file uploaded against a case (and optionally a step).
 

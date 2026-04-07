@@ -105,6 +105,68 @@ export function approveSession(id: string): Promise<WorkflowResult> {
   });
 }
 
+// ── Concierge ──
+
+export interface ConciergeCitation {
+  faq_id: string;
+  question: string;
+  score: number;
+}
+
+export interface ConciergeResponse {
+  answer: string;
+  mode: "lookup" | "format" | "guardrail";
+  citations: ConciergeCitation[];
+}
+
+export interface FAQ {
+  id: string;
+  module_name: string | null;
+  project_id: string | null;
+  question: string;
+  answer: string;
+  source_filename: string;
+  owner_id: string | null;
+  created_at: string;
+}
+
+export function askConcierge(
+  question: string,
+  caseId?: string,
+): Promise<ConciergeResponse> {
+  return request<ConciergeResponse>("/concierge/ask", {
+    method: "POST",
+    body: JSON.stringify({ question, case_id: caseId }),
+  });
+}
+
+export function listFAQs(filters?: {
+  module_name?: string;
+  project_id?: string;
+}): Promise<FAQ[]> {
+  const params = new URLSearchParams();
+  if (filters?.module_name) params.set("module_name", filters.module_name);
+  if (filters?.project_id) params.set("project_id", filters.project_id);
+  const qs = params.toString();
+  return request<FAQ[]>(`/faqs${qs ? `?${qs}` : ""}`);
+}
+
+export function createFAQ(body: {
+  question: string;
+  answer: string;
+  module_name?: string;
+  project_id?: string;
+}): Promise<FAQ> {
+  return request<FAQ>("/faqs", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteFAQ(id: string): Promise<void> {
+  return fetch(`/faqs/${id}`, { method: "DELETE" }).then(() => undefined);
+}
+
 // ── Artifacts (file uploads) ──
 
 export interface Artifact {

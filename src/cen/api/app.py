@@ -17,6 +17,7 @@ from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.artifact_store import ArtifactStore
 from cen.core.audit_store import AuditStore
+from cen.core.faq_store import FAQStore
 from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
@@ -27,7 +28,7 @@ from cen.telemetry.handlers import AuditHandlers, TelemetryHandlers
 from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
-from cen.api.routes import artifacts, auth, health, llm, modules, workflows
+from cen.api.routes import artifacts, auth, concierge, health, llm, modules, workflows
 from cen.api.routes import projects, sessions
 
 logger = structlog.get_logger()
@@ -93,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     project_store = ProjectStore(settings.db_path)
     audit_store = AuditStore(settings.db_path)
     artifact_store = ArtifactStore(settings.db_path)
+    faq_store = FAQStore(settings.db_path)
     storage_backend = LocalDiskStorage(settings.uploads_dir)
 
     @asynccontextmanager
@@ -104,7 +106,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await project_store.initialize()
         await audit_store.initialize()
         await artifact_store.initialize()
+        await faq_store.initialize()
         yield
+        await faq_store.close()
         await artifact_store.close()
         await audit_store.close()
         await project_store.close()
@@ -171,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         project_store=project_store,
         audit_store=audit_store,
         artifact_store=artifact_store,
+        faq_store=faq_store,
         storage_backend=storage_backend,
         event_bus=event_bus,
     )
@@ -186,6 +191,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sessions.router, prefix="/cases", tags=["cases"])
     app.include_router(projects.router)
     app.include_router(artifacts.router)
+    app.include_router(concierge.router)
     app.include_router(modules.router)
 
     # Serve frontend static files (production)
