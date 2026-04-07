@@ -61,6 +61,34 @@ class WorkflowResult(BaseModel):
     context: Dict[str, Any]
 
 
+class Project(BaseModel):
+    """A project represents a patient (or matter) under which one or more
+    cases run. Demographics, identity documents, insurance cards, and
+    consent live at the project level and flow into every case below it.
+
+    v1 stores projects but does not yet expose them in the UI; new cases
+    auto-attach to a default project per owner. The full project picker
+    lands in step 4 of the foundation roadmap.
+    """
+
+    id: str
+    name: str
+    description: str = ""
+    owner_id: Optional[str] = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: str = ""
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class SessionStatus(str, Enum):
     ACTIVE = "ACTIVE"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
