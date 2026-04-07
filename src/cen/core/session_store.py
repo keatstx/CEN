@@ -10,10 +10,10 @@ from typing import List, Optional
 import aiosqlite
 
 from cen.core.exceptions import SessionVersionConflictError
-from cen.core.models import Session, SessionStatus
+from cen.core.models import InputField, Session, SessionStatus
 
 
-# New columns added in v0.3 foundation work. Each entry is
+# New columns added across the v0.3 foundation work. Each entry is
 # (column_name, column_definition) and is added via ALTER TABLE if
 # missing on an existing database.
 _NEW_COLUMNS: list[tuple[str, str]] = [
@@ -22,6 +22,7 @@ _NEW_COLUMNS: list[tuple[str, str]] = [
     ("owner_id", "TEXT"),
     ("project_id", "TEXT"),
     ("version", "INTEGER NOT NULL DEFAULT 1"),
+    ("pending_input_fields", "TEXT"),  # JSON list of InputField; NULL when not paused
 ]
 
 
@@ -54,6 +55,7 @@ class SessionStore:
                 context TEXT NOT NULL DEFAULT '{}',
                 executed_nodes TEXT NOT NULL DEFAULT '[]',
                 pending_node TEXT,
+                pending_input_fields TEXT,
                 approved_nodes TEXT NOT NULL DEFAULT '[]',
                 owner_id TEXT,
                 project_id TEXT,
@@ -177,13 +179,24 @@ class SessionStore:
             "status",
             "executed_nodes",
             "pending_node",
+            "pending_input_fields",
             "approved_nodes",
             "name",
             "owner_id",
             "project_id",
         }
-        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
-        if not updates:
+        # Note: pending_input_fields and pending_node are also allowed to
+        # be set to None (to clear them on resume). Filter out None for
+        # *other* fields, but keep pending_node/pending_input_fields if
+        # they were explicitly passed.
+        updates: dict[str, Any] = {}
+        for k, v in fields.items():
+            if k not in allowed:
+                continue
+            if v is None and k not in ("pending_node", "pending_input_fields"):
+                continue
+            updates[k] = v
+        if not updates and "pending_node" not in fields and "pending_input_fields" not in fields:
             return existing
 
         now = datetime.now(timezone.utc).isoformat()
@@ -193,6 +206,16 @@ class SessionStore:
             set_clauses.append(f"{key} = ?")
             if key in ("context", "executed_nodes", "approved_nodes"):
                 params.append(json.dumps(value))
+            elif key == "pending_input_fields":
+                if value is None:
+                    params.append(None)
+                else:
+                    # Accept either list[InputField] or list[dict]
+                    serialized = [
+                        f.model_dump() if hasattr(f, "model_dump") else f
+                        for f in value
+                    ]
+                    params.append(json.dumps(serialized))
             elif key == "status":
                 params.append(value.value if isinstance(value, SessionStatus) else value)
             else:
@@ -247,6 +270,13 @@ class SessionStore:
 
     @staticmethod
     def _row_to_session(row: aiosqlite.Row) -> Session:
+        pending_input_fields: list[InputField] | None = None
+        if "pending_input_fields" in row.keys() and row["pending_input_fields"]:
+            try:
+                raw = json.loads(row["pending_input_fields"])
+                pending_input_fields = [InputField(**item) for item in raw]
+            except (json.JSONDecodeError, TypeError, ValueError):
+                pending_input_fields = None
         return Session(
             id=row["id"],
             module_name=row["module_name"],
@@ -256,6 +286,7 @@ class SessionStore:
             context=json.loads(row["context"]),
             executed_nodes=json.loads(row["executed_nodes"]),
             pending_node=row["pending_node"],
+            pending_input_fields=pending_input_fields,
             approved_nodes=json.loads(row["approved_nodes"]),
             owner_id=row["owner_id"] if "owner_id" in row.keys() else None,
             project_id=row["project_id"] if "project_id" in row.keys() else None,

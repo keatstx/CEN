@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from cen.api.dependencies import get_engines, get_llm, get_session_store
+from cen.api.routes.sessions import _save_result_back
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.exceptions import CycleDetectedError, ModuleNotFoundError, SessionNotFoundError
 from cen.core.models import AOPDefinition, SessionStatus, WorkflowInput, WorkflowResult
@@ -39,28 +40,11 @@ async def execute_workflow(
 
     result = await engine.execute(payload, approved_nodes=approved, session_id=session_id)
 
-    # Persist result back to session
+    # Persist result back to session via the shared helper, which knows
+    # how to handle all three pause/terminal outcomes (pending_approval,
+    # pending_input, and terminal completed/handoff).
     if session_id is not None:
-        combined_nodes = list(dict.fromkeys(session.executed_nodes + result.executed_nodes))
-        if result.final_outcome.startswith("pending_approval:"):
-            # Extract pending node — last executed node is the approval gate
-            pending = result.executed_nodes[-1] if result.executed_nodes else None
-            await store.update(
-                session_id,
-                context=result.context,
-                executed_nodes=combined_nodes,
-                status=SessionStatus.AWAITING_APPROVAL,
-                pending_node=pending,
-            )
-        else:
-            # handoff:* OR plain "completed" — workflow ran to a terminal node
-            await store.update(
-                session_id,
-                context=result.context,
-                executed_nodes=combined_nodes,
-                status=SessionStatus.COMPLETED,
-                pending_node=None,
-            )
+        await _save_result_back(session_id, session.executed_nodes, result, store)
 
     return result
 

@@ -13,6 +13,8 @@ from cen.core.models import (
     AOPDefinition,
     AOPEdge,
     AOPNode,
+    InputField,
+    NodeMetadata,
     NodeType,
     WorkflowInput,
 )
@@ -467,3 +469,194 @@ class TestResumeIdempotency:
         )
         # Each run fires pre1 + pre2 = 2; total = 4.
         assert len(llm.calls) == 4
+
+
+# ---------------------------------------------------------------------------
+# Step-pause tests (CLAUDE.md non-negotiable for new Executor)
+# ---------------------------------------------------------------------------
+
+def _input_schema_aop() -> AOPDefinition:
+    """ACTION node with declarative input_schema -> HANDOFF.
+
+    The action requires `household_size` and optionally `notes` before
+    it can run. The engine should pause with the schema fields when
+    the required field is missing.
+    """
+    return AOPDefinition(
+        module_name="input_schema_test",
+        nodes=[
+            AOPNode(
+                id="collect",
+                type=NodeType.ACTION,
+                metadata=NodeMetadata(
+                    label="Collect household size",
+                    description="We need this to determine eligibility.",
+                    params={},
+                    input_schema=[
+                        InputField(
+                            key="household_size",
+                            label="Household size",
+                            type="number",
+                            required=True,
+                        ),
+                        InputField(
+                            key="notes",
+                            label="Notes",
+                            type="text",
+                            required=False,
+                        ),
+                    ],
+                ),
+            ),
+            AOPNode(id="done", type=NodeType.HANDOFF, metadata={"label": "Done"}),
+        ],
+        edges=[AOPEdge(source="collect", target="done")],
+    )
+
+
+def _condition_only_aop() -> AOPDefinition:
+    """ACTION -> CONDITION (auto-pause if condition_field missing) -> two ACTIONs.
+
+    The CONDITION reads `income_band` from context. If absent, the
+    engine auto-derives an InputField and pauses without anyone
+    declaring an input_schema.
+    """
+    return AOPDefinition(
+        module_name="condition_pause_test",
+        nodes=[
+            AOPNode(id="start", type=NodeType.ACTION),
+            AOPNode(
+                id="check",
+                type=NodeType.CONDITION,
+                metadata=NodeMetadata(
+                    label="Income band check",
+                    description="Determines eligibility tier.",
+                    params={},
+                ),
+                condition_field="income_band",
+                condition_operator="==",
+                condition_value="low",
+                true_next="low_path",
+                false_next="other_path",
+            ),
+            AOPNode(id="low_path", type=NodeType.ACTION),
+            AOPNode(id="other_path", type=NodeType.ACTION),
+            AOPNode(id="done", type=NodeType.HANDOFF, metadata={"label": "Done"}),
+        ],
+        edges=[
+            AOPEdge(source="start", target="check"),
+            AOPEdge(source="check", target="low_path"),
+            AOPEdge(source="check", target="other_path"),
+            AOPEdge(source="low_path", target="done"),
+            AOPEdge(source="other_path", target="done"),
+        ],
+    )
+
+
+class TestActionInputSchemaPause:
+    async def test_pauses_when_required_field_missing(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_input_schema_aop())
+
+        result = await engine.execute(
+            WorkflowInput(module_name="input_schema_test", context={})
+        )
+
+        assert result.final_outcome.startswith("pending_input:")
+        assert result.pending_node == "collect"
+        assert result.pending_input_fields is not None
+        # Only the required field is reported as missing.
+        keys = [f.key for f in result.pending_input_fields]
+        assert "household_size" in keys
+        assert "notes" not in keys
+        # The action did not execute.
+        assert "collect" not in result.executed_nodes
+
+    async def test_proceeds_when_required_field_present(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_input_schema_aop())
+
+        result = await engine.execute(
+            WorkflowInput(
+                module_name="input_schema_test",
+                context={"household_size": 4},
+            )
+        )
+
+        assert result.final_outcome.startswith("handoff:")
+        assert "collect" in result.executed_nodes
+        assert "done" in result.executed_nodes
+        assert result.pending_input_fields is None
+
+    async def test_resume_after_input_provided(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_input_schema_aop())
+
+        # First run pauses.
+        first = await engine.execute(
+            WorkflowInput(module_name="input_schema_test", context={})
+        )
+        assert first.final_outcome.startswith("pending_input:")
+
+        # User provides the input — merge it into context, resume.
+        merged = dict(first.context)
+        merged["household_size"] = 6
+        second = await engine.execute(
+            WorkflowInput(module_name="input_schema_test", context=merged)
+        )
+        assert second.final_outcome.startswith("handoff:")
+        assert "collect" in second.executed_nodes
+
+
+class TestConditionAutoPause:
+    async def test_auto_pauses_when_condition_field_missing(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_condition_only_aop())
+
+        result = await engine.execute(
+            WorkflowInput(module_name="condition_pause_test", context={})
+        )
+
+        assert result.final_outcome.startswith("pending_input:")
+        assert result.pending_node == "check"
+        assert result.pending_input_fields is not None
+        assert len(result.pending_input_fields) == 1
+        assert result.pending_input_fields[0].key == "income_band"
+        # The earlier ACTION ran; the CONDITION did not.
+        assert "start" in result.executed_nodes
+        assert "check" not in result.executed_nodes
+
+    async def test_proceeds_when_condition_field_present(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_condition_only_aop())
+
+        result = await engine.execute(
+            WorkflowInput(
+                module_name="condition_pause_test", context={"income_band": "low"}
+            )
+        )
+
+        assert result.final_outcome.startswith("handoff:")
+        assert "check" in result.executed_nodes
+        assert "low_path" in result.executed_nodes
+        assert "other_path" not in result.executed_nodes
+
+    async def test_resume_after_condition_input_takes_correct_branch(self):
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(_condition_only_aop())
+
+        # First run pauses at the condition.
+        first = await engine.execute(
+            WorkflowInput(module_name="condition_pause_test", context={})
+        )
+        assert first.final_outcome.startswith("pending_input:")
+
+        # Resume with income_band="other" — should take the false branch.
+        merged = dict(first.context)
+        merged["income_band"] = "other"
+        second = await engine.execute(
+            WorkflowInput(module_name="condition_pause_test", context=merged)
+        )
+        assert second.final_outcome.startswith("handoff:")
+        assert "other_path" in second.executed_nodes
+        assert "low_path" not in second.executed_nodes

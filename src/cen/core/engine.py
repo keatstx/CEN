@@ -14,6 +14,7 @@ from cen.core.exceptions import CycleDetectedError
 from cen.core.models import (
     AOPDefinition,
     AOPNode,
+    InputField,
     NodeType,
     WorkflowInput,
     WorkflowResult,
@@ -121,6 +122,8 @@ class AsyncWorkflowEngine:
 
         sorted_nodes = list(nx.topological_sort(self.graph))
         skip_set: set[str] = set()
+        pending_input_node: str | None = None
+        pending_input_fields: list[InputField] | None = None
 
         for node_id in sorted_nodes:
             if node_id in skip_set:
@@ -129,12 +132,11 @@ class AsyncWorkflowEngine:
             node = self.nodes[node_id]
 
             if node.type == NodeType.ACTION:
-                executed.append(node_id)
-
                 cached = node_outputs.get(node_id)
                 if cached is not None:
                     # Replay: restore context fields written by the previous
                     # execution without firing the LLM call again.
+                    executed.append(node_id)
                     for k, v in cached.items():
                         context[k] = v
                     await self._emit_node_event(
@@ -142,7 +144,22 @@ class AsyncWorkflowEngine:
                     )
                     continue
 
+                # Pre-execution input check (CLAUDE.md non-negotiable for
+                # the new step-pause flow). If the node declares an
+                # input_schema and any required field is missing from
+                # context, pause and ask the user.
+                missing = self._missing_required_inputs(node, context)
+                if missing:
+                    pending_input_node = node_id
+                    pending_input_fields = missing
+                    outcome = f"pending_input:{node.metadata.label or node_id}"
+                    await self._emit_node_event(
+                        session_id, node_id, "ACTION", "pending_input", context
+                    )
+                    break
+
                 # First-time execution path.
+                executed.append(node_id)
                 output: dict[str, Any] = {}
                 llm_prompt = node.metadata.params.get("llm_prompt")
                 if llm_prompt and self._llm:
@@ -172,9 +189,24 @@ class AsyncWorkflowEngine:
                 await self._emit_node_event(session_id, node_id, "ACTION", "done", context)
 
             elif node.type == NodeType.CONDITION:
+                cached = node_outputs.get(node_id)
+                if cached is None:
+                    # Auto-pause if the condition field is missing from
+                    # context. The frontend will render a single input
+                    # for the user to fill in, then the engine resumes
+                    # and re-evaluates the condition.
+                    auto_field = self._auto_derive_condition_input(node, context)
+                    if auto_field is not None:
+                        pending_input_node = node_id
+                        pending_input_fields = [auto_field]
+                        outcome = f"pending_input:{node.metadata.label or node_id}"
+                        await self._emit_node_event(
+                            session_id, node_id, "CONDITION", "pending_input", context
+                        )
+                        break
+
                 executed.append(node_id)
 
-                cached = node_outputs.get(node_id)
                 if cached is not None:
                     # Replay: restore the prior result and apply the same
                     # branch-skip behavior so resumed runs follow the same
@@ -294,6 +326,49 @@ class AsyncWorkflowEngine:
             executed_nodes=executed,
             final_outcome=outcome,
             context=context,
+            pending_node=pending_input_node,
+            pending_input_fields=pending_input_fields,
+        )
+
+    @staticmethod
+    def _missing_required_inputs(
+        node: AOPNode, context: dict[str, Any]
+    ) -> list[InputField] | None:
+        """Return the subset of an ACTION node's input_schema whose required
+        fields are missing from context. Returns None if nothing is missing
+        (so the engine can continue) or there is no schema declared.
+        """
+        schema = node.metadata.input_schema
+        if not schema:
+            return None
+        missing = [f for f in schema if f.required and context.get(f.key) is None]
+        return missing or None
+
+    @staticmethod
+    def _auto_derive_condition_input(
+        node: AOPNode, context: dict[str, Any]
+    ) -> InputField | None:
+        """Auto-derive an input prompt for a CONDITION node when its
+        condition_field is missing from context. Returns None when the
+        field is present (engine proceeds normally) or when the node has
+        no condition_field at all (e.g. malformed switch node — let the
+        existing evaluation path handle it).
+        """
+        field = node.condition_field
+        if not field:
+            return None
+        if context.get(field) is not None:
+            return None
+        # Heuristic for the auto-derived label: use the node's metadata
+        # label if it reads as a question, otherwise prompt for the field
+        # name directly. The frontend can format further.
+        label = node.metadata.label or f"Please provide {field}"
+        return InputField(
+            key=field,
+            label=label,
+            type="text",
+            required=True,
+            description=node.metadata.description or "",
         )
 
     async def _emit_node_event(

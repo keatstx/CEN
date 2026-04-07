@@ -15,10 +15,33 @@ class NodeType(str, Enum):
     APPROVAL = "APPROVAL"
 
 
+class InputField(BaseModel):
+    """One field that the user must provide before a step can execute.
+
+    Used in two ways:
+    - Declarative: an ACTION node's metadata.input_schema lists fields
+      the author wants to prompt for (e.g. file uploads, currency,
+      typed dropdowns).
+    - Auto-derived: the engine generates an InputField on the fly when
+      a CONDITION node's condition_field is missing from context.
+
+    The frontend renders these into form controls in the new
+    three-frame Executor's middle pane.
+    """
+
+    key: str
+    label: str = ""
+    type: str = "text"  # text | number | currency | boolean | date | select | file
+    required: bool = True
+    options: Optional[List[Dict[str, str]]] = None  # for type=select
+    description: str = ""
+
+
 class NodeMetadata(BaseModel):
     label: str = ""
     description: str = ""
     params: Dict[str, Any] = Field(default_factory=dict)
+    input_schema: Optional[List[InputField]] = None
 
 
 class AOPNode(BaseModel):
@@ -59,6 +82,8 @@ class WorkflowResult(BaseModel):
     executed_nodes: List[str]
     final_outcome: str
     context: Dict[str, Any]
+    pending_node: Optional[str] = None
+    pending_input_fields: Optional[List[InputField]] = None
 
 
 class User(BaseModel):
@@ -115,6 +140,7 @@ class ProjectUpdate(BaseModel):
 class SessionStatus(str, Enum):
     ACTIVE = "ACTIVE"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
+    AWAITING_INPUT = "AWAITING_INPUT"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -128,12 +154,17 @@ class Session(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict)
     executed_nodes: List[str] = Field(default_factory=list)
     pending_node: Optional[str] = None
+    pending_input_fields: Optional[List[InputField]] = None
     approved_nodes: List[str] = Field(default_factory=list)
     owner_id: Optional[str] = None
     project_id: Optional[str] = None
     version: int = 1
     created_at: str = ""
     updated_at: str = ""
+
+
+class ProvideInputRequest(BaseModel):
+    inputs: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SessionCreate(BaseModel):
