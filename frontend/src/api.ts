@@ -105,6 +105,48 @@ export function approveSession(id: string): Promise<WorkflowResult> {
   });
 }
 
+// ── Artifacts (file uploads) ──
+
+export interface Artifact {
+  id: string;
+  case_id: string;
+  project_id: string | null;
+  node_id: string | null;
+  filename: string;
+  content_type: string;
+  size: number;
+  storage_key: string;
+  owner_id: string | null;
+  uploaded_at: string;
+}
+
+export async function uploadArtifact(
+  caseId: string,
+  file: File,
+  nodeId?: string,
+): Promise<Artifact> {
+  const form = new FormData();
+  form.append("file", file);
+  if (nodeId) form.append("node_id", nodeId);
+  const res = await fetch(`/cases/${caseId}/artifacts`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? body.error ?? `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function listArtifacts(caseId: string): Promise<Artifact[]> {
+  return request<Artifact[]>(`/cases/${caseId}/artifacts`);
+}
+
+export function artifactDownloadUrl(artifactId: string): string {
+  return `/artifacts/${artifactId}`;
+}
+
 // ── Projects ──
 
 export function listProjects(limit = 50): Promise<Project[]> {

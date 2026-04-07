@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { InputField, Session } from "../types";
+import { uploadArtifact } from "../api";
 
 interface Props {
   caseRecord: Session;
@@ -116,6 +117,8 @@ export default function StepCard({ caseRecord, loading, onSubmit, onApprove }: P
               key={field.key}
               field={field}
               value={values[field.key]}
+              caseId={caseRecord.id}
+              nodeId={caseRecord.pending_node ?? undefined}
               onChange={(v) =>
                 setValues((prev) => ({ ...prev, [field.key]: v }))
               }
@@ -144,10 +147,14 @@ export default function StepCard({ caseRecord, loading, onSubmit, onApprove }: P
 function FieldInput({
   field,
   value,
+  caseId,
+  nodeId,
   onChange,
 }: {
   field: InputField;
   value: unknown;
+  caseId: string;
+  nodeId?: string;
   onChange: (v: unknown) => void;
 }) {
   const labelEl = (
@@ -237,17 +244,15 @@ function FieldInput({
 
   if (field.type === "file") {
     return (
-      <div>
-        {labelEl}
-        <input
-          type="file"
-          disabled
-          className="w-full text-xs"
-        />
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
-          File uploads coming soon — for now, please describe the document in the next text field.
-        </p>
-      </div>
+      <FileFieldInput
+        field={field}
+        value={value as string | null}
+        caseId={caseId}
+        nodeId={nodeId}
+        onChange={onChange}
+        labelEl={labelEl}
+        description={description}
+      />
     );
   }
 
@@ -263,6 +268,77 @@ function FieldInput({
         placeholder="Type your answer…"
       />
       {description}
+    </div>
+  );
+}
+
+function FileFieldInput({
+  value,
+  caseId,
+  nodeId,
+  onChange,
+  labelEl,
+  description,
+}: {
+  field: InputField;
+  value: string | null;
+  caseId: string;
+  nodeId?: string;
+  onChange: (v: unknown) => void;
+  labelEl: React.ReactNode;
+  description: React.ReactNode;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedName, setUploadedName] = useState<string | null>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const artifact = await uploadArtifact(caseId, file, nodeId);
+      // Store the artifact id as the field's value — the engine sees the
+      // id in context and downstream nodes can fetch the file by id.
+      onChange(artifact.id);
+      setUploadedName(artifact.filename);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      {labelEl}
+      <input
+        type="file"
+        onChange={handleFile}
+        disabled={uploading}
+        className="w-full text-xs"
+        accept=".pdf,.png,.jpg,.jpeg,.heic,.tif,.tiff,.gif,.docx,.txt"
+      />
+      {uploading && (
+        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">Uploading…</p>
+      )}
+      {uploadedName && !uploading && (
+        <p className="text-[11px] text-[var(--color-success)] mt-1">
+          ✓ Uploaded: {uploadedName}
+        </p>
+      )}
+      {uploadError && (
+        <p className="text-[11px] text-[var(--color-danger)] mt-1">
+          {uploadError}
+        </p>
+      )}
+      {description}
+      {value && !uploadedName && (
+        <p className="text-[10px] font-mono text-[var(--color-text-muted)] mt-1">
+          ID: {value}
+        </p>
+      )}
     </div>
   );
 }

@@ -17,11 +17,13 @@ from cen.core.models import User
 _DEV_STUB_USER = User(id="default-operator", name="Default Operator")
 
 if TYPE_CHECKING:
+    from cen.core.artifact_store import ArtifactStore
     from cen.core.audit_store import AuditStore
     from cen.core.engine import AsyncWorkflowEngine
     from cen.core.project_store import ProjectStore
     from cen.core.session_store import SessionStore
     from cen.llm.factory import FallbackLanguageModel
+    from cen.storage.base import StorageBackend
     from cen.telemetry.bus import AsyncEventBus
 
 # These are populated by create_app() at startup.
@@ -31,6 +33,8 @@ _llm: FallbackLanguageModel | None = None
 _session_store: SessionStore | None = None
 _project_store: ProjectStore | None = None
 _audit_store: AuditStore | None = None
+_artifact_store: ArtifactStore | None = None
+_storage_backend: StorageBackend | None = None
 _event_bus: AsyncEventBus | None = None
 
 
@@ -41,15 +45,20 @@ def init_dependencies(
     session_store: SessionStore | None = None,
     project_store: ProjectStore | None = None,
     audit_store: AuditStore | None = None,
+    artifact_store: ArtifactStore | None = None,
+    storage_backend: StorageBackend | None = None,
     event_bus: AsyncEventBus | None = None,
 ) -> None:
-    global _settings, _engines, _llm, _session_store, _project_store, _audit_store, _event_bus
+    global _settings, _engines, _llm, _session_store, _project_store
+    global _audit_store, _artifact_store, _storage_backend, _event_bus
     _settings = settings
     _engines = engines
     _llm = llm
     _session_store = session_store
     _project_store = project_store
     _audit_store = audit_store
+    _artifact_store = artifact_store
+    _storage_backend = storage_backend
     _event_bus = event_bus
 
 
@@ -75,6 +84,16 @@ def get_session_store() -> SessionStore:
 def get_project_store() -> ProjectStore:
     assert _project_store is not None
     return _project_store
+
+
+def get_artifact_store() -> ArtifactStore:
+    assert _artifact_store is not None
+    return _artifact_store
+
+
+def get_storage_backend() -> StorageBackend:
+    assert _storage_backend is not None
+    return _storage_backend
 
 
 def get_audit_store() -> AuditStore:

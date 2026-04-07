@@ -167,6 +167,26 @@ class ProvideInputRequest(BaseModel):
     inputs: Dict[str, Any] = Field(default_factory=dict)
 
 
+class Artifact(BaseModel):
+    """Metadata for a file uploaded against a case (and optionally a step).
+
+    The actual file bytes live in the StorageBackend keyed by
+    `storage_key`; this model is the database row that links it to the
+    case and tracks the user-facing properties.
+    """
+
+    id: str
+    case_id: str
+    project_id: Optional[str] = None
+    node_id: Optional[str] = None
+    filename: str
+    content_type: str
+    size: int
+    storage_key: str
+    owner_id: Optional[str] = None
+    uploaded_at: str = ""
+
+
 class SessionCreate(BaseModel):
     module_name: str
     context: Dict[str, Any] = Field(default_factory=dict)

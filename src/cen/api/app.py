@@ -15,17 +15,19 @@ from fastapi.responses import FileResponse
 from cen.config import Settings
 from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
+from cen.core.artifact_store import ArtifactStore
 from cen.core.audit_store import AuditStore
 from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
+from cen.storage import LocalDiskStorage
 from cen.privacy.pii_scrubber import create_scrubber
 from cen.telemetry.bus import AsyncEventBus
 from cen.telemetry.handlers import AuditHandlers, TelemetryHandlers
 from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
-from cen.api.routes import auth, health, llm, modules, workflows
+from cen.api.routes import artifacts, auth, health, llm, modules, workflows
 from cen.api.routes import projects, sessions
 
 logger = structlog.get_logger()
@@ -86,10 +88,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _enforce_deployment_mode(settings)
     _configure_structlog(settings)
 
-    # Session store + project store + audit store — created here, init/close via lifespan
+    # Stores — created here, init/close via lifespan.
     session_store = SessionStore(settings.db_path)
     project_store = ProjectStore(settings.db_path)
     audit_store = AuditStore(settings.db_path)
+    artifact_store = ArtifactStore(settings.db_path)
+    storage_backend = LocalDiskStorage(settings.uploads_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -99,7 +103,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await session_store.initialize()
         await project_store.initialize()
         await audit_store.initialize()
+        await artifact_store.initialize()
         yield
+        await artifact_store.close()
         await audit_store.close()
         await project_store.close()
         await session_store.close()
@@ -164,6 +170,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         session_store=session_store,
         project_store=project_store,
         audit_store=audit_store,
+        artifact_store=artifact_store,
+        storage_backend=storage_backend,
         event_bus=event_bus,
     )
 
@@ -177,6 +185,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
     app.include_router(sessions.router, prefix="/cases", tags=["cases"])
     app.include_router(projects.router)
+    app.include_router(artifacts.router)
     app.include_router(modules.router)
 
     # Serve frontend static files (production)

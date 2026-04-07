@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # Database
     db_path: str = "./data/cen.db"
 
+    # Uploads
+    uploads_dir: str = "./data/uploads"
+
     # Deployment / hardening hooks (v1: synthetic data only)
     deployment_mode: Literal["synthetic", "production"] = "synthetic"
     operator_password: str = ""  # empty = auth disabled (dev/test default)
