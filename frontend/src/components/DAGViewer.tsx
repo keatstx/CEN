@@ -146,17 +146,27 @@ function NodeRect({
   ln,
   selected,
   onClick,
+  onHover,
+  onLeave,
 }: {
   ln: LayoutNode;
   selected: boolean;
   onClick: () => void;
+  onHover: (id: string, clientX: number, clientY: number) => void;
+  onLeave: () => void;
 }) {
   const colors = NODE_COLORS[ln.node.type] ?? NODE_COLORS.ACTION;
   const label = ln.node.metadata.label || ln.id;
   const typeLabel = ln.node.type;
 
   return (
-    <g onClick={onClick} style={{ cursor: "pointer" }}>
+    <g
+      onClick={onClick}
+      onMouseEnter={(e) => onHover(ln.id, e.clientX, e.clientY)}
+      onMouseMove={(e) => onHover(ln.id, e.clientX, e.clientY)}
+      onMouseLeave={onLeave}
+      style={{ cursor: "pointer" }}
+    >
       <rect
         x={ln.x}
         y={ln.y}
@@ -260,6 +270,17 @@ function DAGCanvas({
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
   const dragging = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const onHoverNode = useCallback((id: string, clientX: number, clientY: number) => {
+    const c = containerRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    setHover({ id, x: clientX - rect.left, y: clientY - rect.top });
+  }, []);
+  const onLeaveNode = useCallback(() => setHover(null), []);
+
+  const hoverNode = hover ? aop.nodes.find((n) => n.id === hover.id) ?? null : null;
 
   const fit = useCallback(() => {
     const c = containerRef.current;
@@ -397,11 +418,45 @@ function DAGCanvas({
                 ln={ln}
                 selected={selectedNode === ln.id}
                 onClick={() => setSelectedNode(selectedNode === ln.id ? null : ln.id)}
+                onHover={onHoverNode}
+                onLeave={onLeaveNode}
               />
             </g>
           ))}
         </svg>
       </div>
+
+      {/* Hover tooltip */}
+      {hover && hoverNode && (
+        <div
+          className="pointer-events-none absolute z-20 max-w-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg text-xs"
+          style={{
+            left: Math.min(hover.x + 14, (containerRef.current?.clientWidth ?? 0) - 320),
+            top: Math.min(hover.y + 14, (containerRef.current?.clientHeight ?? 0) - 140),
+          }}
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <span
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ background: (NODE_COLORS[hoverNode.type] ?? NODE_COLORS.ACTION).stroke }}
+            />
+            <span className="font-semibold text-[var(--color-text-primary)]">
+              {hoverNode.metadata.label || hoverNode.id}
+            </span>
+            <span className="text-[10px] font-mono text-[var(--color-text-muted)] ml-auto">
+              {hoverNode.type}
+            </span>
+          </div>
+          {hoverNode.metadata.description && (
+            <p className="text-[var(--color-text-secondary)] leading-relaxed">
+              {hoverNode.metadata.description}
+            </p>
+          )}
+          <p className="mt-1 text-[10px] font-mono text-[var(--color-text-muted)]">
+            {hoverNode.id}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
