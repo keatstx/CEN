@@ -109,6 +109,16 @@ class AsyncWorkflowEngine:
         outcome = "completed"
         _approved = approved_nodes or set()
 
+        # Idempotency cache (CLAUDE.md non-negotiable #3): per-node outputs
+        # from prior runs of this workflow. When the engine resumes after
+        # an APPROVAL pause (or, in the future, an AWAITING_INPUT pause),
+        # any node already in the cache replays its cached state instead
+        # of re-executing — so LLM calls and external side effects fire
+        # exactly once across the lifetime of a case.
+        node_outputs: dict[str, dict[str, Any]] = dict(
+            context.get("__node_outputs", {})
+        )
+
         sorted_nodes = list(nx.topological_sort(self.graph))
         skip_set: set[str] = set()
 
@@ -120,7 +130,20 @@ class AsyncWorkflowEngine:
 
             if node.type == NodeType.ACTION:
                 executed.append(node_id)
-                # If the node has an llm_prompt param and we have an LLM, call it
+
+                cached = node_outputs.get(node_id)
+                if cached is not None:
+                    # Replay: restore context fields written by the previous
+                    # execution without firing the LLM call again.
+                    for k, v in cached.items():
+                        context[k] = v
+                    await self._emit_node_event(
+                        session_id, node_id, "ACTION", "done", context
+                    )
+                    continue
+
+                # First-time execution path.
+                output: dict[str, Any] = {}
                 llm_prompt = node.metadata.params.get("llm_prompt")
                 if llm_prompt and self._llm:
                     prompt = llm_prompt.format(**context) if "{" in llm_prompt else llm_prompt
@@ -142,17 +165,64 @@ class AsyncWorkflowEngine:
                     else:
                         llm_response = await self._llm.generate(prompt)
                     context[f"{node_id}_llm_response"] = llm_response
+                    output[f"{node_id}_llm_response"] = llm_response
                 context[f"{node_id}_status"] = "done"
+                output[f"{node_id}_status"] = "done"
+                node_outputs[node_id] = output
                 await self._emit_node_event(session_id, node_id, "ACTION", "done", context)
 
             elif node.type == NodeType.CONDITION:
                 executed.append(node_id)
+
+                cached = node_outputs.get(node_id)
+                if cached is not None:
+                    # Replay: restore the prior result and apply the same
+                    # branch-skip behavior so resumed runs follow the same
+                    # path through the DAG.
+                    for k, v in cached.items():
+                        context[k] = v
+                    if node.condition_operator == "switch" and node.branches:
+                        chosen = cached.get(f"{node_id}_result")
+                        await self._emit_node_event(
+                            session_id, node_id, "CONDITION", f"switch:{chosen}", context
+                        )
+                        if chosen:
+                            keep_reachable = (
+                                {chosen} | nx.descendants(self.graph, chosen)
+                                if chosen in self.graph
+                                else set()
+                            )
+                            for target in set(node.branches.values()) - {chosen}:
+                                if target in self.graph:
+                                    candidates = {target} | nx.descendants(self.graph, target)
+                                    for n in candidates - keep_reachable:
+                                        skip_set.add(n)
+                    else:
+                        result = cached.get(f"{node_id}_result")
+                        await self._emit_node_event(
+                            session_id, node_id, "CONDITION",
+                            "true" if result else "false", context,
+                        )
+                        if result:
+                            if node.false_next:
+                                self._collect_exclusive_branch(
+                                    node.false_next, node.true_next or "", skip_set
+                                )
+                        else:
+                            if node.true_next:
+                                self._collect_exclusive_branch(
+                                    node.true_next, node.false_next or "", skip_set
+                                )
+                    continue
+
+                # First-time execution path.
 
                 # Multi-way switch router
                 if node.condition_operator == "switch" and node.branches:
                     actual = context.get(node.condition_field or "")
                     chosen = node.branches.get(actual) if actual is not None else None
                     context[f"{node_id}_result"] = chosen
+                    node_outputs[node_id] = {f"{node_id}_result": chosen}
                     await self._emit_node_event(
                         session_id, node_id, "CONDITION", f"switch:{chosen}", context
                     )
@@ -169,6 +239,7 @@ class AsyncWorkflowEngine:
 
                 result = self._evaluate_condition(node, context)
                 context[f"{node_id}_result"] = result
+                node_outputs[node_id] = {f"{node_id}_result": result}
                 await self._emit_node_event(
                     session_id, node_id, "CONDITION", "true" if result else "false", context
                 )
@@ -198,6 +269,10 @@ class AsyncWorkflowEngine:
                     outcome = f"pending_approval:{node.metadata.label or node_id}"
                     await self._emit_node_event(session_id, node_id, "APPROVAL", "pending_approval", context)
                     break
+
+        # Persist the per-node output cache back into the workflow context
+        # so the session_store round-trips it on save/resume.
+        context["__node_outputs"] = node_outputs
 
         elapsed = time.time() - start
 

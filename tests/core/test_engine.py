@@ -265,3 +265,205 @@ class TestConcurrencyLimits:
         evt = captured[0]
         assert evt.node_id == "llm_node"
         assert evt.wait_time > 0
+
+
+# ---------------------------------------------------------------------------
+# Resume idempotency tests (CLAUDE.md non-negotiable #3)
+# ---------------------------------------------------------------------------
+
+class _CallCountingLLM:
+    """Fake LLM that records every call so tests can assert exact-once semantics."""
+
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+        self.calls.append(prompt)
+        return f"response_{len(self.calls)}"
+
+    async def is_available(self) -> bool:
+        return True
+
+    @property
+    def backend_name(self) -> str:
+        return "counting_mock"
+
+
+def _resume_aop() -> AOPDefinition:
+    """ACTION (LLM) -> CONDITION -> ACTION (LLM) -> APPROVAL -> ACTION (LLM) -> HANDOFF.
+
+    Has two LLM ACTION nodes before the approval gate, one after. Used to
+    verify that resuming after the gate does not re-fire the pre-gate LLMs.
+    """
+    return AOPDefinition(
+        module_name="resume_test",
+        nodes=[
+            AOPNode(
+                id="pre1",
+                type=NodeType.ACTION,
+                metadata={
+                    "label": "Pre-gate LLM 1",
+                    "description": "",
+                    "params": {"llm_prompt": "first prompt"},
+                },
+            ),
+            AOPNode(
+                id="branch",
+                type=NodeType.CONDITION,
+                condition_field="route",
+                condition_operator="==",
+                condition_value="A",
+                true_next="pre2",
+                false_next="skipped_branch",
+            ),
+            AOPNode(
+                id="pre2",
+                type=NodeType.ACTION,
+                metadata={
+                    "label": "Pre-gate LLM 2",
+                    "description": "",
+                    "params": {"llm_prompt": "second prompt"},
+                },
+            ),
+            AOPNode(id="skipped_branch", type=NodeType.ACTION),
+            AOPNode(
+                id="gate",
+                type=NodeType.APPROVAL,
+                metadata={"label": "Manager Approval", "description": "", "params": {}},
+            ),
+            AOPNode(
+                id="post",
+                type=NodeType.ACTION,
+                metadata={
+                    "label": "Post-gate LLM",
+                    "description": "",
+                    "params": {"llm_prompt": "third prompt"},
+                },
+            ),
+            AOPNode(id="done", type=NodeType.HANDOFF, metadata={"label": "Done"}),
+        ],
+        edges=[
+            AOPEdge(source="pre1", target="branch"),
+            AOPEdge(source="branch", target="pre2"),
+            AOPEdge(source="branch", target="skipped_branch"),
+            AOPEdge(source="pre2", target="gate"),
+            AOPEdge(source="skipped_branch", target="gate"),
+            AOPEdge(source="gate", target="post"),
+            AOPEdge(source="post", target="done"),
+        ],
+    )
+
+
+class TestResumeIdempotency:
+    """Verifies CLAUDE.md non-negotiable #3: side effects fire exactly once
+    across pause/resume. The cache lives in context["__node_outputs"]."""
+
+    async def test_first_run_pauses_at_gate_and_caches_outputs(self):
+        llm = _CallCountingLLM()
+        engine = AsyncWorkflowEngine(llm=llm)
+        engine.load_aop(_resume_aop())
+
+        result = await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+
+        # Workflow paused at the gate.
+        assert result.final_outcome.startswith("pending_approval:")
+        # Both pre-gate LLM nodes ran exactly once.
+        assert len(llm.calls) == 2
+        # Cache contains the executed nodes (pre1, branch, pre2, gate
+        # — gate is APPROVAL and isn't cached, but the others are).
+        cache = result.context["__node_outputs"]
+        assert "pre1" in cache
+        assert "branch" in cache
+        assert "pre2" in cache
+        assert "pre1_llm_response" in cache["pre1"]
+        assert cache["pre1"]["pre1_llm_response"] == "response_1"
+        assert cache["pre2"]["pre2_llm_response"] == "response_2"
+
+    async def test_resume_does_not_replay_pre_gate_llm_calls(self):
+        llm = _CallCountingLLM()
+        engine = AsyncWorkflowEngine(llm=llm)
+        engine.load_aop(_resume_aop())
+
+        # First run: pauses at gate, makes 2 LLM calls.
+        first = await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+        assert len(llm.calls) == 2
+
+        # Resume: pass the saved context (which now contains __node_outputs)
+        # back in along with the approved gate. Critical: pre1 and pre2 must
+        # NOT fire again. Only the post-gate LLM (post) fires.
+        second = await engine.execute(
+            WorkflowInput(module_name="resume_test", context=first.context),
+            approved_nodes={"gate"},
+        )
+
+        # Total LLM calls is now 3: 2 from the first run + 1 from the resume.
+        # If the cache failed, it would be 4 (pre1 + pre2 re-fired).
+        assert len(llm.calls) == 3
+        assert llm.calls[2] == "third prompt"
+        assert second.final_outcome.startswith("handoff:")
+
+    async def test_cached_action_replays_response_into_context(self):
+        llm = _CallCountingLLM()
+        engine = AsyncWorkflowEngine(llm=llm)
+        engine.load_aop(_resume_aop())
+
+        first = await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+        first_response = first.context["pre1_llm_response"]
+
+        second = await engine.execute(
+            WorkflowInput(module_name="resume_test", context=first.context),
+            approved_nodes={"gate"},
+        )
+
+        # The cached response is restored into the resumed context unchanged.
+        assert second.context["pre1_llm_response"] == first_response
+        assert second.context["pre2_llm_response"] == first.context["pre2_llm_response"]
+
+    async def test_cached_condition_keeps_branch_decision_stable(self):
+        llm = _CallCountingLLM()
+        engine = AsyncWorkflowEngine(llm=llm)
+        engine.load_aop(_resume_aop())
+
+        # First run with route="A": branch goes to pre2.
+        first = await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+        assert "pre2" in first.executed_nodes
+        assert "skipped_branch" not in first.executed_nodes
+
+        # Tamper with the route field on resume — the cached condition
+        # result should still pin us to the original branch.
+        tampered_context = dict(first.context)
+        tampered_context["route"] = "B"
+
+        second = await engine.execute(
+            WorkflowInput(module_name="resume_test", context=tampered_context),
+            approved_nodes={"gate"},
+        )
+
+        # Still in the original branch despite the tampered field — the
+        # cached condition result wins.
+        assert "pre2" in second.executed_nodes
+        assert "skipped_branch" not in second.executed_nodes
+
+    async def test_no_cache_on_fresh_context_runs_normally(self):
+        llm = _CallCountingLLM()
+        engine = AsyncWorkflowEngine(llm=llm)
+        engine.load_aop(_resume_aop())
+
+        # Two completely separate runs (different cases) should each
+        # fire all the pre-gate LLMs.
+        await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+        await engine.execute(
+            WorkflowInput(module_name="resume_test", context={"route": "A"})
+        )
+        # Each run fires pre1 + pre2 = 2; total = 4.
+        assert len(llm.calls) == 4
