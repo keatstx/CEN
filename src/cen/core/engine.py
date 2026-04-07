@@ -30,7 +30,11 @@ OPERATORS = {
     ">=": operator.ge,
     "==": operator.eq,
     "!=": operator.ne,
+    "in": lambda a, b: a in b,
+    "not in": lambda a, b: a not in b,
 }
+
+NUMERIC_OPS = {"<", "<=", ">", ">="}
 
 
 class AsyncWorkflowEngine:
@@ -68,7 +72,14 @@ class AsyncWorkflowEngine:
         op_str = node.condition_operator
         value = node.condition_value
 
-        if field is None or op_str is None or value is None:
+        if field is None or op_str is None:
+            return False
+
+        # Allow comparing against another context field
+        if node.condition_value_field is not None:
+            value = context.get(node.condition_value_field)
+
+        if value is None:
             return False
 
         actual = context.get(field)
@@ -79,10 +90,12 @@ class AsyncWorkflowEngine:
         if op_func is None:
             raise ValueError(f"Unknown operator: {op_str}")
 
-        try:
-            return op_func(float(actual), float(value))
-        except (TypeError, ValueError):
-            return op_func(actual, value)
+        if op_str in NUMERIC_OPS:
+            try:
+                return op_func(float(actual), float(value))
+            except (TypeError, ValueError):
+                pass
+        return op_func(actual, value)
 
     async def execute(
         self,
@@ -134,6 +147,26 @@ class AsyncWorkflowEngine:
 
             elif node.type == NodeType.CONDITION:
                 executed.append(node_id)
+
+                # Multi-way switch router
+                if node.condition_operator == "switch" and node.branches:
+                    actual = context.get(node.condition_field or "")
+                    chosen = node.branches.get(actual) if actual is not None else None
+                    context[f"{node_id}_result"] = chosen
+                    await self._emit_node_event(
+                        session_id, node_id, "CONDITION", f"switch:{chosen}", context
+                    )
+                    all_targets = set(node.branches.values())
+                    if chosen:
+                        keep_reachable = {chosen} | nx.descendants(self.graph, chosen) \
+                            if chosen in self.graph else set()
+                        for target in all_targets - {chosen}:
+                            if target in self.graph:
+                                candidates = {target} | nx.descendants(self.graph, target)
+                                for n in candidates - keep_reachable:
+                                    skip_set.add(n)
+                    continue
+
                 result = self._evaluate_condition(node, context)
                 context[f"{node_id}_result"] = result
                 await self._emit_node_event(

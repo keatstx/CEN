@@ -1,112 +1,96 @@
 {
   "module_name": "community_resource_router",
-  "version": "1.0",
-  "description": "Sequential screening for housing, food, and transportation needs, then routes to matching community resources.",
+  "version": "2.0",
+  "description": "End-to-end SDOH workflow: full domain screening (PRAPARE/AHC-HRSN), real resource database lookup, eligibility filtering, warm handoff submission, appointment scheduling, closed-loop confirmation, follow-up cadence, outcome capture, and re-screening trigger.",
   "nodes": [
-    {
-      "id": "needs_intake",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Needs Intake",
-        "description": "Collect self-reported social determinant needs from the patient.",
-        "params": {}
-      }
-    },
-    {
-      "id": "housing_need",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Housing Need?",
-        "description": "Determine if the patient has identified a housing need.",
-        "params": {}
-      },
-      "condition_field": "needs_housing",
-      "condition_operator": "==",
-      "condition_value": true,
-      "true_next": "housing_resources",
-      "false_next": "food_need"
-    },
-    {
-      "id": "housing_resources",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Housing Resources",
-        "description": "Compile local housing assistance programs and shelters.",
-        "params": {
-          "llm_prompt": "List community housing resources for someone in {zip_code}."
-        }
-      }
-    },
-    {
-      "id": "food_need",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Food Need?",
-        "description": "Determine if the patient has identified a food insecurity need.",
-        "params": {}
-      },
-      "condition_field": "needs_food",
-      "condition_operator": "==",
-      "condition_value": true,
-      "true_next": "food_resources",
-      "false_next": "transport_need"
-    },
-    {
-      "id": "food_resources",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Food Resources",
-        "description": "Compile local food banks, SNAP assistance, and meal programs.",
-        "params": {
-          "llm_prompt": "List community food resources for someone in {zip_code}."
-        }
-      }
-    },
-    {
-      "id": "transport_need",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Transportation Need?",
-        "description": "Determine if the patient needs transportation assistance.",
-        "params": {}
-      },
-      "condition_field": "needs_transport",
-      "condition_operator": "==",
-      "condition_value": true,
-      "true_next": "transport_resources",
-      "false_next": "handoff_navigator"
-    },
-    {
-      "id": "transport_resources",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Transportation Resources",
-        "description": "Compile medical transportation and transit assistance programs.",
-        "params": {
-          "llm_prompt": "List community transportation resources for someone in {zip_code}."
-        }
-      }
-    },
-    {
-      "id": "handoff_navigator",
-      "type": "HANDOFF",
-      "metadata": {
-        "label": "Navigator Referral",
-        "description": "Hand off compiled resource list to a Community Equity Navigator for follow-up.",
-        "params": {}
-      }
-    }
+    { "id": "intake_start", "type": "ACTION", "metadata": { "label": "Case Intake Start" } },
+    { "id": "consent", "type": "APPROVAL", "metadata": { "label": "Consent & Data Sharing" } },
+    { "id": "sdoh_screener", "type": "ACTION", "metadata": { "label": "Full SDOH Screener", "description": "PRAPARE + AHC-HRSN: housing, food, utilities, transport, childcare, employment, legal, behavioral health, substance use, IPV, immigration, veterans, prescription, dental, vision, tech access, education." } },
+    { "id": "needs_aggregation", "type": "ACTION", "metadata": { "label": "Needs Aggregation & Prioritization" } },
+    { "id": "domain_router", "type": "ACTION", "metadata": { "label": "Domain Router (Parallel Fan-Out)" } },
+    { "id": "housing", "type": "ACTION", "metadata": { "label": "Housing Domain Lookup" } },
+    { "id": "food", "type": "ACTION", "metadata": { "label": "Food Domain Lookup" } },
+    { "id": "utilities", "type": "ACTION", "metadata": { "label": "Utilities (LIHEAP) Lookup" } },
+    { "id": "transport", "type": "ACTION", "metadata": { "label": "Transportation Lookup" } },
+    { "id": "childcare", "type": "ACTION", "metadata": { "label": "Childcare Lookup" } },
+    { "id": "employment", "type": "ACTION", "metadata": { "label": "Employment & Workforce Lookup" } },
+    { "id": "legal", "type": "ACTION", "metadata": { "label": "Legal Aid Lookup" } },
+    { "id": "behavioral_health", "type": "ACTION", "metadata": { "label": "Behavioral Health Lookup" } },
+    { "id": "substance_use", "type": "ACTION", "metadata": { "label": "Substance Use Treatment Lookup" } },
+    { "id": "ipv", "type": "ACTION", "metadata": { "label": "Domestic Violence Safety Lookup" } },
+    { "id": "immigration", "type": "ACTION", "metadata": { "label": "Immigration Services Lookup" } },
+    { "id": "veterans", "type": "ACTION", "metadata": { "label": "Veterans Services Lookup" } },
+    { "id": "prescription", "type": "ACTION", "metadata": { "label": "Prescription Assistance Lookup" } },
+    { "id": "dental_vision", "type": "ACTION", "metadata": { "label": "Dental & Vision Lookup" } },
+    { "id": "tech_access", "type": "ACTION", "metadata": { "label": "Technology Access Lookup" } },
+    { "id": "resource_db_query", "type": "ACTION", "metadata": { "label": "Resource Database Query", "description": "Query findhelp/Aunt Bertha, 211, NowPow, Unite Us, and ThriveAI local index by ZIP." } },
+    { "id": "eligibility_filter", "type": "ACTION", "metadata": { "label": "Eligibility Filter", "description": "Filter results by income, geography, age, language, insurance, immigration status." } },
+    { "id": "consolidate_resources", "type": "ACTION", "metadata": { "label": "Consolidate Resource Plan" } },
+    { "id": "warm_handoff", "type": "ACTION", "metadata": { "label": "Warm Handoff Submission", "description": "Submit electronic referrals via Unite Us / NowPow / direct API." } },
+    { "id": "appointment_scheduler", "type": "ACTION", "metadata": { "label": "Appointment Scheduling", "description": "Book intake appointments where supported." } },
+    { "id": "patient_confirmation", "type": "CONDITION", "metadata": { "label": "Patient Confirmed Receipt?" }, "condition_field": "patient_confirmed", "condition_operator": "==", "condition_value": true, "true_next": "service_followup", "false_next": "navigator_outreach" },
+    { "id": "navigator_outreach", "type": "HANDOFF", "metadata": { "label": "Navigator Outreach" } },
+    { "id": "service_followup", "type": "ACTION", "metadata": { "label": "Service Follow-Up", "description": "7-day, 30-day, 90-day check-ins." } },
+    { "id": "closed_loop", "type": "CONDITION", "metadata": { "label": "Service Received?" }, "condition_field": "service_received", "condition_operator": "==", "condition_value": true, "true_next": "outcome_capture", "false_next": "barrier_resolution" },
+    { "id": "barrier_resolution", "type": "ACTION", "metadata": { "label": "Barrier Resolution", "description": "Identify why service was not received; alternate referral." } },
+    { "id": "barrier_loop_check", "type": "CONDITION", "metadata": { "label": "Retry Available?" }, "condition_field": "retry_count", "condition_operator": "<", "condition_value": 2, "true_next": "guild_escalation", "false_next": "guild_escalation" },
+    { "id": "guild_escalation", "type": "HANDOFF", "metadata": { "label": "Guild Escalation" } },
+    { "id": "outcome_capture", "type": "ACTION", "metadata": { "label": "Outcome Capture", "description": "Need met/partial/unmet, dollar value, service received date." } },
+    { "id": "rescreen_scheduler", "type": "ACTION", "metadata": { "label": "Re-Screening Scheduler", "description": "Schedule SDOH re-screen at 90 or 180 days." } },
+    { "id": "patient_notification", "type": "ACTION", "metadata": { "label": "Patient Notification" } },
+    { "id": "case_close", "type": "ACTION", "metadata": { "label": "Case Close" } }
   ],
   "edges": [
-    { "source": "needs_intake", "target": "housing_need", "label": "intake complete" },
-    { "source": "housing_need", "target": "housing_resources", "label": "needs housing" },
-    { "source": "housing_need", "target": "food_need", "label": "no housing need" },
-    { "source": "housing_resources", "target": "food_need", "label": "housing compiled" },
-    { "source": "food_need", "target": "food_resources", "label": "needs food" },
-    { "source": "food_need", "target": "transport_need", "label": "no food need" },
-    { "source": "food_resources", "target": "transport_need", "label": "food compiled" },
-    { "source": "transport_need", "target": "transport_resources", "label": "needs transport" },
-    { "source": "transport_need", "target": "handoff_navigator", "label": "no transport need" },
-    { "source": "transport_resources", "target": "handoff_navigator", "label": "transport compiled" }
+    { "source": "intake_start", "target": "consent" },
+    { "source": "consent", "target": "sdoh_screener" },
+    { "source": "sdoh_screener", "target": "needs_aggregation" },
+    { "source": "needs_aggregation", "target": "domain_router" },
+    { "source": "domain_router", "target": "housing" },
+    { "source": "domain_router", "target": "food" },
+    { "source": "domain_router", "target": "utilities" },
+    { "source": "domain_router", "target": "transport" },
+    { "source": "domain_router", "target": "childcare" },
+    { "source": "domain_router", "target": "employment" },
+    { "source": "domain_router", "target": "legal" },
+    { "source": "domain_router", "target": "behavioral_health" },
+    { "source": "domain_router", "target": "substance_use" },
+    { "source": "domain_router", "target": "ipv" },
+    { "source": "domain_router", "target": "immigration" },
+    { "source": "domain_router", "target": "veterans" },
+    { "source": "domain_router", "target": "prescription" },
+    { "source": "domain_router", "target": "dental_vision" },
+    { "source": "domain_router", "target": "tech_access" },
+    { "source": "housing", "target": "resource_db_query" },
+    { "source": "food", "target": "resource_db_query" },
+    { "source": "utilities", "target": "resource_db_query" },
+    { "source": "transport", "target": "resource_db_query" },
+    { "source": "childcare", "target": "resource_db_query" },
+    { "source": "employment", "target": "resource_db_query" },
+    { "source": "legal", "target": "resource_db_query" },
+    { "source": "behavioral_health", "target": "resource_db_query" },
+    { "source": "substance_use", "target": "resource_db_query" },
+    { "source": "ipv", "target": "resource_db_query" },
+    { "source": "immigration", "target": "resource_db_query" },
+    { "source": "veterans", "target": "resource_db_query" },
+    { "source": "prescription", "target": "resource_db_query" },
+    { "source": "dental_vision", "target": "resource_db_query" },
+    { "source": "tech_access", "target": "resource_db_query" },
+    { "source": "resource_db_query", "target": "eligibility_filter" },
+    { "source": "eligibility_filter", "target": "consolidate_resources" },
+    { "source": "consolidate_resources", "target": "warm_handoff" },
+    { "source": "warm_handoff", "target": "appointment_scheduler" },
+    { "source": "appointment_scheduler", "target": "patient_confirmation" },
+    { "source": "patient_confirmation", "target": "service_followup", "label": "confirmed" },
+    { "source": "patient_confirmation", "target": "navigator_outreach", "label": "no confirm" },
+    { "source": "navigator_outreach", "target": "service_followup" },
+    { "source": "service_followup", "target": "closed_loop" },
+    { "source": "closed_loop", "target": "outcome_capture", "label": "received" },
+    { "source": "closed_loop", "target": "barrier_resolution", "label": "not received" },
+    { "source": "barrier_resolution", "target": "barrier_loop_check" },
+    { "source": "barrier_loop_check", "target": "guild_escalation" },
+    { "source": "guild_escalation", "target": "outcome_capture" },
+    { "source": "outcome_capture", "target": "rescreen_scheduler" },
+    { "source": "rescreen_scheduler", "target": "patient_notification" },
+    { "source": "patient_notification", "target": "case_close" }
   ]
 }

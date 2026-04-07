@@ -52,20 +52,13 @@ async def execute_workflow(
                 status=SessionStatus.AWAITING_APPROVAL,
                 pending_node=pending,
             )
-        elif result.final_outcome.startswith("handoff:"):
+        else:
+            # handoff:* OR plain "completed" — workflow ran to a terminal node
             await store.update(
                 session_id,
                 context=result.context,
                 executed_nodes=combined_nodes,
                 status=SessionStatus.COMPLETED,
-                pending_node=None,
-            )
-        else:
-            await store.update(
-                session_id,
-                context=result.context,
-                executed_nodes=combined_nodes,
-                status=SessionStatus.ACTIVE,
                 pending_node=None,
             )
 

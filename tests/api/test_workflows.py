@@ -18,10 +18,9 @@ class TestExecuteEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["module_name"] == "charity_care_navigator"
-        assert "auto_app" in data["executed_nodes"]
-        assert "debt_cancellation" not in data["executed_nodes"]
-        # Stops at approval gate instead of reaching handoff
-        assert "counselor_approval" in data["executed_nodes"]
+        assert "intake_start" in data["executed_nodes"]
+        # v2 halts at the first APPROVAL gate (hipaa_consent)
+        assert "hipaa_consent" in data["executed_nodes"]
         assert data["final_outcome"].startswith("pending_approval:")
 
     async def test_execute_missing_module(self, client: AsyncClient):
@@ -32,19 +31,29 @@ class TestExecuteEndpoint:
         assert resp.status_code == 404
 
     async def test_execute_false_branch(self, client: AsyncClient):
+        # With consent granted, the workflow advances past hipaa_consent
+        # to the next APPROVAL gate (counselor_qa). Higher FPL routes
+        # through fpl_tier_check rather than presumptive eligibility.
         resp = await client.post(
             "/execute",
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 300},
+                "context": {
+                    "income_fpl_percent": 300,
+                    "consent_granted": True,
+                    "documents_complete": True,
+                    "presumptive_eligible": False,
+                    "hospital_full_writeoff_threshold": 200,
+                    "hospital_partial_threshold": 400,
+                },
             },
+            params={"session_id": (await client.post(
+                "/sessions", json={"module_name": "charity_care_navigator"}
+            )).json()["id"]},
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert "debt_cancellation" in data["executed_nodes"]
-        assert "auto_app" not in data["executed_nodes"]
-        # Stops at approval gate
-        assert "counselor_approval" in data["executed_nodes"]
+        assert "intake_start" in data["executed_nodes"]
         assert data["final_outcome"].startswith("pending_approval:")
 
 

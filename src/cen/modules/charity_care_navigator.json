@@ -1,76 +1,83 @@
 {
   "module_name": "charity_care_navigator",
-  "version": "1.0",
-  "description": "Routes patients based on income relative to the Federal Poverty Level (FPL). If income < 200% FPL, route to Auto-App for charity care assistance. Otherwise, route to the Debt Cancellation Engine.",
+  "version": "2.0",
+  "description": "End-to-end charity care workflow: identity, consent, document collection, hospital-specific policy lookup, presumptive eligibility, application submission, status polling, denial/appeal loop, account reconciliation, patient notification, and case closure.",
   "nodes": [
-    {
-      "id": "income_verification",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Income Verification",
-        "description": "Collect and verify the patient's household income and size.",
-        "params": {}
-      }
-    },
-    {
-      "id": "fpl_check",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "FPL Threshold Check",
-        "description": "Determine if income is below 200% of the Federal Poverty Level.",
-        "params": {
-          "fpl_threshold_percent": 200
-        }
-      },
-      "condition_field": "income_fpl_percent",
-      "condition_operator": "<",
-      "condition_value": 200,
-      "true_next": "auto_app",
-      "false_next": "debt_cancellation"
-    },
-    {
-      "id": "auto_app",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Auto-App Submission",
-        "description": "Automatically generate and submit a charity care application on behalf of the patient.",
-        "params": {}
-      }
-    },
-    {
-      "id": "debt_cancellation",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Debt Cancellation Engine",
-        "description": "Audit the medical bill for errors, NSA violations, and generate dispute letters.",
-        "params": {}
-      }
-    },
-    {
-      "id": "counselor_approval",
-      "type": "APPROVAL",
-      "metadata": {
-        "label": "Counselor Approval",
-        "description": "A counselor must approve the application before the case is handed off.",
-        "params": {}
-      }
-    },
-    {
-      "id": "handoff_counselor",
-      "type": "HANDOFF",
-      "metadata": {
-        "label": "Counselor Review",
-        "description": "Hand off the completed case to a human Community Equity Navigator for final review.",
-        "params": {}
-      }
-    }
+    { "id": "intake_start", "type": "ACTION", "metadata": { "label": "Case Intake Start", "description": "Create case record and capture referral source." } },
+    { "id": "identity_verification", "type": "ACTION", "metadata": { "label": "Identity Verification", "description": "Verify patient identity (name, DOB, SSN last 4, address)." } },
+    { "id": "hipaa_consent", "type": "APPROVAL", "metadata": { "label": "HIPAA & Advocacy Consent", "description": "Obtain signed HIPAA authorization and advocacy consent." } },
+    { "id": "consent_check", "type": "CONDITION", "metadata": { "label": "Consent Granted?" }, "condition_field": "consent_granted", "condition_operator": "==", "condition_value": true, "true_next": "document_intake", "false_next": "case_close_no_consent" },
+    { "id": "document_intake", "type": "ACTION", "metadata": { "label": "Document Collection", "description": "Collect pay stubs, tax returns, ID, proof of residency, household composition, hospital bill." } },
+    { "id": "documents_complete", "type": "CONDITION", "metadata": { "label": "Documents Complete?" }, "condition_field": "documents_complete", "condition_operator": "==", "condition_value": true, "true_next": "hospital_policy_lookup", "false_next": "document_followup" },
+    { "id": "document_followup", "type": "ACTION", "metadata": { "label": "Document Follow-Up", "description": "SMS/email reminder to patient; pause case with SLA timer (7 days)." } },
+    { "id": "document_followup_timer", "type": "CONDITION", "metadata": { "label": "Documents Received in 7 Days?" }, "condition_field": "documents_complete", "condition_operator": "==", "condition_value": true, "true_next": "hospital_policy_lookup", "false_next": "navigator_outreach" },
+    { "id": "navigator_outreach", "type": "HANDOFF", "metadata": { "label": "Navigator Manual Outreach", "description": "Local CEN attempts in-person or phone outreach." } },
+    { "id": "hospital_policy_lookup", "type": "ACTION", "metadata": { "label": "Hospital Policy Lookup", "description": "Retrieve facility-specific charity care policy, FPL multiplier, and required forms from policy database." } },
+    { "id": "income_verification", "type": "ACTION", "metadata": { "label": "Income Verification", "description": "Calculate household income vs FPL using collected documents." } },
+    { "id": "presumptive_eligibility", "type": "CONDITION", "metadata": { "label": "Presumptive Eligibility?", "description": "Check Medicaid, SNAP, homeless, deceased, or other presumptive triggers." }, "condition_field": "presumptive_eligible", "condition_operator": "==", "condition_value": true, "true_next": "auto_app_full", "false_next": "fpl_tier_check" },
+    { "id": "fpl_tier_check", "type": "CONDITION", "metadata": { "label": "FPL Tier Check", "description": "Compare income to hospital's full-write-off threshold." }, "condition_field": "income_fpl_percent", "condition_operator": "<", "condition_value_field": "hospital_full_writeoff_threshold", "true_next": "auto_app_full", "false_next": "sliding_scale_check" },
+    { "id": "sliding_scale_check", "type": "CONDITION", "metadata": { "label": "Sliding Scale Eligible?" }, "condition_field": "income_fpl_percent", "condition_operator": "<", "condition_value_field": "hospital_partial_threshold", "true_next": "auto_app_partial", "false_next": "route_to_debt_engine" },
+    { "id": "auto_app_full", "type": "ACTION", "metadata": { "label": "Generate Full Charity Care Application" } },
+    { "id": "auto_app_partial", "type": "ACTION", "metadata": { "label": "Generate Sliding Scale Application" } },
+    { "id": "route_to_debt_engine", "type": "HANDOFF", "metadata": { "label": "Route to Debt Cancellation Engine", "description": "Patient ineligible for charity care; orchestrator triggers debt_cancellation_engine module." } },
+    { "id": "counselor_qa", "type": "APPROVAL", "metadata": { "label": "Counselor QA Review" } },
+    { "id": "application_submission", "type": "ACTION", "metadata": { "label": "Submit Application", "description": "Transmit application to hospital financial assistance department via portal, fax, or mail with delivery confirmation." } },
+    { "id": "submission_confirmed", "type": "CONDITION", "metadata": { "label": "Submission Confirmed?" }, "condition_field": "submission_confirmed", "condition_operator": "==", "condition_value": true, "true_next": "status_poll", "false_next": "retry_submission" },
+    { "id": "retry_submission", "type": "ACTION", "metadata": { "label": "Retry Submission", "description": "Retry up to 3 times then escalate." } },
+    { "id": "status_poll", "type": "ACTION", "metadata": { "label": "Status Poll Loop", "description": "Poll hospital weekly for determination (max 60 days)." } },
+    { "id": "determination", "type": "CONDITION", "metadata": { "label": "Determination Received?" }, "condition_field": "determination_status", "condition_operator": "in", "condition_value": ["approved_full", "approved_partial", "denied", "pending"], "true_next": "determination_router", "false_next": "determination_router" },
+    { "id": "determination_router", "type": "CONDITION", "metadata": { "label": "Determination Router" }, "condition_field": "determination_status", "condition_operator": "==", "condition_value": "denied", "true_next": "appeal_decision", "false_next": "account_reconciliation" },
+    { "id": "appeal_decision", "type": "APPROVAL", "metadata": { "label": "Appeal Decision", "description": "Navigator decides whether to appeal denial." } },
+    { "id": "appeal_loop", "type": "ACTION", "metadata": { "label": "File Charity Care Appeal", "description": "Draft and submit appeal with additional documentation." } },
+    { "id": "appeal_outcome", "type": "CONDITION", "metadata": { "label": "Appeal Outcome" }, "condition_field": "appeal_status", "condition_operator": "==", "condition_value": "overturned", "true_next": "account_reconciliation", "false_next": "escalation_router" },
+    { "id": "escalation_router", "type": "ACTION", "metadata": { "label": "Escalation Router", "description": "Route to IL AG Hospital Uninsured Patient Discount Act enforcement, CFPB, or state regulator." } },
+    { "id": "account_reconciliation", "type": "ACTION", "metadata": { "label": "Account Reconciliation", "description": "Post charity care write-off against patient account; capture remaining balance." } },
+    { "id": "outcome_capture", "type": "ACTION", "metadata": { "label": "Outcome Capture", "description": "Record dollars written off, balance remaining, effective date, hospital, KPI tags." } },
+    { "id": "patient_notification", "type": "ACTION", "metadata": { "label": "Patient Notification", "description": "SMS, email, and voice notification of result in patient's preferred language." } },
+    { "id": "remaining_balance_check", "type": "CONDITION", "metadata": { "label": "Remaining Balance > 0?" }, "condition_field": "remaining_balance", "condition_operator": ">", "condition_value": 0, "true_next": "route_to_debt_engine", "false_next": "case_close_success" },
+    { "id": "case_close_success", "type": "ACTION", "metadata": { "label": "Case Close: Success", "description": "Close case with reason code RESOLVED_CHARITY_CARE." } },
+    { "id": "case_close_no_consent", "type": "ACTION", "metadata": { "label": "Case Close: No Consent", "description": "Close case with reason code NO_CONSENT." } }
   ],
   "edges": [
-    { "source": "income_verification", "target": "fpl_check", "label": "verified" },
-    { "source": "fpl_check", "target": "auto_app", "label": "income < 200% FPL" },
-    { "source": "fpl_check", "target": "debt_cancellation", "label": "income >= 200% FPL" },
-    { "source": "auto_app", "target": "counselor_approval", "label": "app submitted" },
-    { "source": "debt_cancellation", "target": "counselor_approval", "label": "audit complete" },
-    { "source": "counselor_approval", "target": "handoff_counselor", "label": "approved" }
+    { "source": "intake_start", "target": "identity_verification" },
+    { "source": "identity_verification", "target": "hipaa_consent" },
+    { "source": "hipaa_consent", "target": "consent_check" },
+    { "source": "consent_check", "target": "document_intake", "label": "consent granted" },
+    { "source": "consent_check", "target": "case_close_no_consent", "label": "no consent" },
+    { "source": "document_intake", "target": "documents_complete" },
+    { "source": "documents_complete", "target": "hospital_policy_lookup", "label": "complete" },
+    { "source": "documents_complete", "target": "document_followup", "label": "incomplete" },
+    { "source": "document_followup", "target": "document_followup_timer" },
+    { "source": "document_followup_timer", "target": "hospital_policy_lookup", "label": "received" },
+    { "source": "document_followup_timer", "target": "navigator_outreach", "label": "timeout" },
+    { "source": "hospital_policy_lookup", "target": "income_verification" },
+    { "source": "income_verification", "target": "presumptive_eligibility" },
+    { "source": "presumptive_eligibility", "target": "auto_app_full", "label": "presumptive" },
+    { "source": "presumptive_eligibility", "target": "fpl_tier_check", "label": "not presumptive" },
+    { "source": "fpl_tier_check", "target": "auto_app_full", "label": "below full threshold" },
+    { "source": "fpl_tier_check", "target": "sliding_scale_check", "label": "above full threshold" },
+    { "source": "sliding_scale_check", "target": "auto_app_partial", "label": "sliding scale" },
+    { "source": "sliding_scale_check", "target": "route_to_debt_engine", "label": "ineligible" },
+    { "source": "auto_app_full", "target": "counselor_qa" },
+    { "source": "auto_app_partial", "target": "counselor_qa" },
+    { "source": "counselor_qa", "target": "application_submission", "label": "approved" },
+    { "source": "application_submission", "target": "submission_confirmed" },
+    { "source": "submission_confirmed", "target": "status_poll", "label": "confirmed" },
+    { "source": "submission_confirmed", "target": "retry_submission", "label": "failed" },
+    { "source": "status_poll", "target": "determination" },
+    { "source": "determination", "target": "determination_router", "label": "received" },
+    { "source": "determination_router", "target": "appeal_decision", "label": "denied" },
+    { "source": "determination_router", "target": "account_reconciliation", "label": "approved" },
+    { "source": "appeal_decision", "target": "appeal_loop", "label": "appeal" },
+    { "source": "appeal_decision", "target": "escalation_router", "label": "no appeal" },
+    { "source": "appeal_loop", "target": "appeal_outcome" },
+    { "source": "appeal_outcome", "target": "account_reconciliation", "label": "overturned" },
+    { "source": "appeal_outcome", "target": "escalation_router", "label": "upheld" },
+    { "source": "escalation_router", "target": "outcome_capture" },
+    { "source": "account_reconciliation", "target": "outcome_capture" },
+    { "source": "outcome_capture", "target": "patient_notification" },
+    { "source": "patient_notification", "target": "remaining_balance_check" },
+    { "source": "remaining_balance_check", "target": "route_to_debt_engine", "label": "balance > 0" },
+    { "source": "remaining_balance_check", "target": "case_close_success", "label": "balance = 0" }
   ]
 }

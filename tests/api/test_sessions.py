@@ -158,39 +158,47 @@ class TestApprovalFlow:
         )
         sid = create.json()["id"]
 
-        # Execute — should stop at counselor_approval
+        # Execute — v2 flow halts at the first APPROVAL gate (hipaa_consent)
         resp = await client.post(
             "/execute",
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {
+                    "income_fpl_percent": 150,
+                    "consent_granted": True,
+                    "documents_complete": True,
+                    "presumptive_eligible": True,
+                    "submission_confirmed": True,
+                    "determination_status": "approved_full",
+                    "remaining_balance": 0,
+                },
             },
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["final_outcome"].startswith("pending_approval:")
-        assert "counselor_approval" in data["executed_nodes"]
-        assert "handoff_counselor" not in data["executed_nodes"]
+        assert "hipaa_consent" in data["executed_nodes"]
 
-        # Verify session is AWAITING_APPROVAL
+        # Verify session is AWAITING_APPROVAL on the first gate
         session_resp = await client.get(f"/sessions/{sid}")
         session_data = session_resp.json()
         assert session_data["status"] == "AWAITING_APPROVAL"
-        assert session_data["pending_node"] == "counselor_approval"
+        assert session_data["pending_node"] == "hipaa_consent"
 
-        # Approve
-        approve_resp = await client.post(f"/sessions/{sid}/approve")
-        assert approve_resp.status_code == 200
-        approve_data = approve_resp.json()
-        assert approve_data["final_outcome"].startswith("handoff:")
-        assert "handoff_counselor" in approve_data["executed_nodes"]
+        # Walk through every approval gate until the workflow completes
+        approved_gates: list[str] = []
+        for _ in range(10):
+            if session_data["status"] != "AWAITING_APPROVAL":
+                break
+            approve_resp = await client.post(f"/sessions/{sid}/approve")
+            assert approve_resp.status_code == 200
+            approved_gates.append(session_data["pending_node"])
+            session_resp = await client.get(f"/sessions/{sid}")
+            session_data = session_resp.json()
 
-        # Verify session is now COMPLETED
-        final = await client.get(f"/sessions/{sid}")
-        final_data = final.json()
-        assert final_data["status"] == "COMPLETED"
-        assert "counselor_approval" in final_data["approved_nodes"]
+        assert session_data["status"] == "COMPLETED"
+        assert "hipaa_consent" in approved_gates
 
     async def test_approve_non_awaiting_session_returns_409(self, client: AsyncClient):
         create = await client.post(
@@ -294,10 +302,8 @@ class TestAuditTrail:
         assert "pending_approval" in outcomes
         # Should have the explicit approval event
         assert "approved" in outcomes
-        # Should have handoff from re-execution after approval
-        assert any(o.startswith("handoff:") for o in outcomes)
-        # The approval node should appear in the trail
-        assert "counselor_approval" in node_ids
+        # The first approval gate (hipaa_consent in v2) should appear in the trail
+        assert "hipaa_consent" in node_ids
 
     async def test_audit_filter_by_node_type(self, client: AsyncClient):
         create = await client.post(

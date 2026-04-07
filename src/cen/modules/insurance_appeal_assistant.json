@@ -1,108 +1,104 @@
 {
   "module_name": "insurance_appeal_assistant",
-  "version": "1.0",
-  "description": "Classifies insurance claim denials and routes to the appropriate appeal pathway.",
+  "version": "2.0",
+  "description": "End-to-end insurance appeal workflow: denial intake, expanded denial taxonomy, deadline tracking, evidence retrieval, physician letter request, multi-level appeal loop (L1, L2, external review, state complaint), submission, response wait, claim resubmission, outcome capture, and case closure.",
   "nodes": [
-    {
-      "id": "denial_intake",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Denial Intake",
-        "description": "Collect the Explanation of Benefits (EOB) and denial letter details.",
-        "params": {}
-      }
-    },
-    {
-      "id": "classify_denial",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Denial Classification",
-        "description": "Use LLM to classify the denial reason into a category.",
-        "params": {
-          "llm_prompt": "Classify this insurance denial reason: {denial_reason}"
-        }
-      }
-    },
-    {
-      "id": "is_medical_necessity",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Medical Necessity Denial?",
-        "description": "Check if the denial is for medical necessity.",
-        "params": {}
-      },
-      "condition_field": "denial_type",
-      "condition_operator": "==",
-      "condition_value": "medical_necessity",
-      "true_next": "appeal_medical_necessity",
-      "false_next": "is_coding_error"
-    },
-    {
-      "id": "is_coding_error",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Coding Error?",
-        "description": "Check if the denial is due to a coding or billing error.",
-        "params": {}
-      },
-      "condition_field": "denial_type",
-      "condition_operator": "==",
-      "condition_value": "coding_error",
-      "true_next": "appeal_coding",
-      "false_next": "appeal_general"
-    },
-    {
-      "id": "appeal_medical_necessity",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Medical Necessity Appeal",
-        "description": "Draft appeal letter with clinical justification for medical necessity.",
-        "params": {
-          "llm_prompt": "Draft a medical necessity appeal for: {denial_reason}"
-        }
-      }
-    },
-    {
-      "id": "appeal_coding",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Coding Error Appeal",
-        "description": "Draft appeal citing correct CPT/ICD codes.",
-        "params": {
-          "llm_prompt": "Draft a coding error appeal for: {denial_reason}"
-        }
-      }
-    },
-    {
-      "id": "appeal_general",
-      "type": "ACTION",
-      "metadata": {
-        "label": "General Appeal",
-        "description": "Draft a general appeal letter for other denial types.",
-        "params": {
-          "llm_prompt": "Draft a general insurance appeal for: {denial_reason}"
-        }
-      }
-    },
-    {
-      "id": "handoff_navigator",
-      "type": "HANDOFF",
-      "metadata": {
-        "label": "Navigator Review",
-        "description": "Hand off the completed appeal to a Community Equity Navigator.",
-        "params": {}
-      }
-    }
+    { "id": "intake_start", "type": "ACTION", "metadata": { "label": "Case Intake Start" } },
+    { "id": "hipaa_consent", "type": "APPROVAL", "metadata": { "label": "HIPAA & AOR Consent", "description": "Authorization of Representative form for payer." } },
+    { "id": "denial_intake", "type": "ACTION", "metadata": { "label": "Denial Intake", "description": "Collect EOB, denial letter, member ID, claim number, dates of service." } },
+    { "id": "deadline_tracker", "type": "ACTION", "metadata": { "label": "Deadline Tracker", "description": "Calculate appeal deadline (typically 180 days for ERISA, varies for Medicare/Medicaid)." } },
+    { "id": "deadline_check", "type": "CONDITION", "metadata": { "label": "Within Appeal Window?" }, "condition_field": "days_remaining", "condition_operator": ">", "condition_value": 0, "true_next": "classify_denial", "false_next": "good_cause_extension" },
+    { "id": "good_cause_extension", "type": "ACTION", "metadata": { "label": "Good Cause Extension Request" } },
+    { "id": "classify_denial", "type": "ACTION", "metadata": { "label": "Denial Classification", "description": "Classify into: medical_necessity, prior_auth, experimental, out_of_network, timely_filing, eligibility, duplicate, missing_info, non_covered, step_therapy, formulary, coding_error." } },
+    { "id": "denial_router", "type": "CONDITION", "metadata": { "label": "Denial Type Router" }, "condition_field": "denial_type", "condition_operator": "switch", "condition_value": ["medical_necessity", "prior_auth", "experimental", "out_of_network", "timely_filing", "eligibility", "duplicate", "missing_info", "non_covered", "step_therapy", "formulary", "coding_error"], "branches": { "medical_necessity": "evidence_retrieval", "prior_auth": "prior_auth_evidence", "experimental": "experimental_evidence", "out_of_network": "nsa_check", "timely_filing": "timely_filing_defense", "eligibility": "eligibility_defense", "duplicate": "duplicate_defense", "missing_info": "info_resubmit", "non_covered": "benefit_check", "step_therapy": "step_therapy_defense", "formulary": "formulary_exception", "coding_error": "coding_correction" } },
+    { "id": "evidence_retrieval", "type": "ACTION", "metadata": { "label": "Clinical Evidence Retrieval", "description": "Pull peer-reviewed literature, clinical guidelines (NCCN, ACC, AHA), medical records." } },
+    { "id": "physician_letter_request", "type": "ACTION", "metadata": { "label": "Physician Letter of Medical Necessity Request" } },
+    { "id": "physician_letter_received", "type": "CONDITION", "metadata": { "label": "Letter Received?" }, "condition_field": "physician_letter_received", "condition_operator": "==", "condition_value": true, "true_next": "draft_appeal", "false_next": "draft_appeal" },
+    { "id": "physician_followup", "type": "ACTION", "metadata": { "label": "Physician Office Follow-Up" } },
+    { "id": "prior_auth_evidence", "type": "ACTION", "metadata": { "label": "Prior Auth Evidence Pack" } },
+    { "id": "experimental_evidence", "type": "ACTION", "metadata": { "label": "Experimental/Investigational Evidence Pack" } },
+    { "id": "nsa_check", "type": "ACTION", "metadata": { "label": "No Surprises Act Check & IDR Routing" } },
+    { "id": "timely_filing_defense", "type": "ACTION", "metadata": { "label": "Timely Filing Defense" } },
+    { "id": "eligibility_defense", "type": "ACTION", "metadata": { "label": "Eligibility Defense" } },
+    { "id": "duplicate_defense", "type": "ACTION", "metadata": { "label": "Duplicate Claim Defense" } },
+    { "id": "info_resubmit", "type": "ACTION", "metadata": { "label": "Missing Info Resubmission" } },
+    { "id": "benefit_check", "type": "ACTION", "metadata": { "label": "Benefit Coverage Verification" } },
+    { "id": "step_therapy_defense", "type": "ACTION", "metadata": { "label": "Step Therapy Override Request" } },
+    { "id": "formulary_exception", "type": "ACTION", "metadata": { "label": "Formulary Exception Request" } },
+    { "id": "coding_correction", "type": "ACTION", "metadata": { "label": "Coding Correction & Resubmit" } },
+    { "id": "draft_appeal", "type": "ACTION", "metadata": { "label": "Draft Appeal Letter" } },
+    { "id": "counselor_qa", "type": "APPROVAL", "metadata": { "label": "Counselor QA Review" } },
+    { "id": "submit_appeal", "type": "ACTION", "metadata": { "label": "Submit Appeal", "description": "Submit via payer portal, certified mail, and fax with delivery proof." } },
+    { "id": "appeal_level_tag", "type": "ACTION", "metadata": { "label": "Tag Appeal Level (L1/L2/External/State)" } },
+    { "id": "response_wait", "type": "ACTION", "metadata": { "label": "Response Wait State", "description": "Pre-service: 30 days. Post-service: 60 days. Urgent: 72 hours." } },
+    { "id": "response_received", "type": "CONDITION", "metadata": { "label": "Response Received?" }, "condition_field": "appeal_response", "condition_operator": "in", "condition_value": ["overturned", "partial", "upheld", "no_response"], "true_next": "appeal_outcome_router", "false_next": "appeal_outcome_router" },
+    { "id": "appeal_outcome_router", "type": "CONDITION", "metadata": { "label": "Outcome Router" }, "condition_field": "appeal_response", "condition_operator": "==", "condition_value": "overturned", "true_next": "claim_resubmission", "false_next": "next_level_decision" },
+    { "id": "next_level_decision", "type": "CONDITION", "metadata": { "label": "Next Appeal Level Available?" }, "condition_field": "next_level", "condition_operator": "in", "condition_value": ["L2", "external", "state_complaint", "none"], "true_next": "escalate_level", "false_next": "guild_attorney_referral" },
+    { "id": "escalate_level", "type": "ACTION", "metadata": { "label": "Escalate to Next Appeal Level" } },
+    { "id": "external_review", "type": "ACTION", "metadata": { "label": "External Independent Review (IRO)" } },
+    { "id": "state_complaint", "type": "ACTION", "metadata": { "label": "State Insurance Department Complaint" } },
+    { "id": "guild_attorney_referral", "type": "HANDOFF", "metadata": { "label": "Guild Attorney Referral", "description": "Refer to FairClaims Guild attorney for ERISA litigation or bad faith claim." } },
+    { "id": "claim_resubmission", "type": "ACTION", "metadata": { "label": "Claim Resubmission to Provider", "description": "Notify provider to resubmit overturned claim for payment." } },
+    { "id": "payment_confirmation", "type": "ACTION", "metadata": { "label": "Payment Confirmation Tracking" } },
+    { "id": "outcome_capture", "type": "ACTION", "metadata": { "label": "Outcome Capture", "description": "Record overturned/upheld, dollars recovered, days to resolution." } },
+    { "id": "patient_notification", "type": "ACTION", "metadata": { "label": "Patient Notification" } },
+    { "id": "case_close", "type": "ACTION", "metadata": { "label": "Case Close" } }
   ],
   "edges": [
-    { "source": "denial_intake", "target": "classify_denial", "label": "denial collected" },
-    { "source": "classify_denial", "target": "is_medical_necessity", "label": "classified" },
-    { "source": "is_medical_necessity", "target": "appeal_medical_necessity", "label": "medical necessity" },
-    { "source": "is_medical_necessity", "target": "is_coding_error", "label": "not medical necessity" },
-    { "source": "is_coding_error", "target": "appeal_coding", "label": "coding error" },
-    { "source": "is_coding_error", "target": "appeal_general", "label": "other denial type" },
-    { "source": "appeal_medical_necessity", "target": "handoff_navigator", "label": "appeal drafted" },
-    { "source": "appeal_coding", "target": "handoff_navigator", "label": "appeal drafted" },
-    { "source": "appeal_general", "target": "handoff_navigator", "label": "appeal drafted" }
+    { "source": "intake_start", "target": "hipaa_consent" },
+    { "source": "hipaa_consent", "target": "denial_intake" },
+    { "source": "denial_intake", "target": "deadline_tracker" },
+    { "source": "deadline_tracker", "target": "deadline_check" },
+    { "source": "deadline_check", "target": "classify_denial", "label": "in window" },
+    { "source": "deadline_check", "target": "good_cause_extension", "label": "expired" },
+    { "source": "good_cause_extension", "target": "classify_denial" },
+    { "source": "classify_denial", "target": "denial_router" },
+    { "source": "denial_router", "target": "evidence_retrieval", "label": "medical_necessity" },
+    { "source": "denial_router", "target": "prior_auth_evidence", "label": "prior_auth" },
+    { "source": "denial_router", "target": "experimental_evidence", "label": "experimental" },
+    { "source": "denial_router", "target": "nsa_check", "label": "out_of_network" },
+    { "source": "denial_router", "target": "timely_filing_defense", "label": "timely_filing" },
+    { "source": "denial_router", "target": "eligibility_defense", "label": "eligibility" },
+    { "source": "denial_router", "target": "duplicate_defense", "label": "duplicate" },
+    { "source": "denial_router", "target": "info_resubmit", "label": "missing_info" },
+    { "source": "denial_router", "target": "benefit_check", "label": "non_covered" },
+    { "source": "denial_router", "target": "step_therapy_defense", "label": "step_therapy" },
+    { "source": "denial_router", "target": "formulary_exception", "label": "formulary" },
+    { "source": "denial_router", "target": "coding_correction", "label": "coding_error" },
+    { "source": "evidence_retrieval", "target": "physician_letter_request" },
+    { "source": "physician_letter_request", "target": "physician_letter_received" },
+    { "source": "physician_letter_received", "target": "draft_appeal", "label": "received" },
+    { "source": "physician_letter_received", "target": "physician_followup", "label": "missing" },
+    { "source": "physician_followup", "target": "draft_appeal" },
+    { "source": "prior_auth_evidence", "target": "draft_appeal" },
+    { "source": "experimental_evidence", "target": "draft_appeal" },
+    { "source": "nsa_check", "target": "draft_appeal" },
+    { "source": "timely_filing_defense", "target": "draft_appeal" },
+    { "source": "eligibility_defense", "target": "draft_appeal" },
+    { "source": "duplicate_defense", "target": "draft_appeal" },
+    { "source": "info_resubmit", "target": "draft_appeal" },
+    { "source": "benefit_check", "target": "draft_appeal" },
+    { "source": "step_therapy_defense", "target": "draft_appeal" },
+    { "source": "formulary_exception", "target": "draft_appeal" },
+    { "source": "coding_correction", "target": "draft_appeal" },
+    { "source": "draft_appeal", "target": "counselor_qa" },
+    { "source": "counselor_qa", "target": "submit_appeal", "label": "approved" },
+    { "source": "submit_appeal", "target": "appeal_level_tag" },
+    { "source": "appeal_level_tag", "target": "response_wait" },
+    { "source": "response_wait", "target": "response_received" },
+    { "source": "response_received", "target": "appeal_outcome_router", "label": "received" },
+    { "source": "appeal_outcome_router", "target": "claim_resubmission", "label": "overturned" },
+    { "source": "appeal_outcome_router", "target": "next_level_decision", "label": "upheld/partial" },
+    { "source": "next_level_decision", "target": "escalate_level", "label": "level available" },
+    { "source": "next_level_decision", "target": "guild_attorney_referral", "label": "exhausted" },
+    { "source": "escalate_level", "target": "external_review", "label": "external" },
+    { "source": "escalate_level", "target": "state_complaint", "label": "state" },
+    { "source": "external_review", "target": "outcome_capture" },
+    { "source": "state_complaint", "target": "outcome_capture" },
+    { "source": "guild_attorney_referral", "target": "outcome_capture" },
+    { "source": "claim_resubmission", "target": "payment_confirmation" },
+    { "source": "payment_confirmation", "target": "outcome_capture" },
+    { "source": "outcome_capture", "target": "patient_notification" },
+    { "source": "patient_notification", "target": "case_close" }
   ]
 }

@@ -1,120 +1,78 @@
 {
   "module_name": "benefits_enrollment_navigator",
-  "version": "1.0",
-  "description": "Screens household eligibility for Medicaid, ACA marketplace plans, and CHIP in a cascade.",
+  "version": "2.0",
+  "description": "End-to-end benefits enrollment: Medicare check, household composition split, state-specific Medicaid rules, document collection, real subsidy calculation, application submission per program, determination tracking, plan selection, enrollment confirmation, premium payment setup, and renewal scheduling.",
   "nodes": [
-    {
-      "id": "collect_household",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Household Data Collection",
-        "description": "Collect household size, income, state of residence, and dependents under 19.",
-        "params": {}
-      }
-    },
-    {
-      "id": "medicaid_eligible",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Medicaid Eligible?",
-        "description": "Check if household income is below 138% FPL for Medicaid expansion states.",
-        "params": {}
-      },
-      "condition_field": "income_fpl_percent",
-      "condition_operator": "<",
-      "condition_value": 138,
-      "true_next": "enroll_medicaid",
-      "false_next": "aca_eligible"
-    },
-    {
-      "id": "enroll_medicaid",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Medicaid Enrollment",
-        "description": "Prepare Medicaid application with household data.",
-        "params": {
-          "llm_prompt": "Prepare a Medicaid enrollment summary for a household at {income_fpl_percent}% FPL."
-        }
-      }
-    },
-    {
-      "id": "aca_eligible",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "ACA Subsidy Eligible?",
-        "description": "Check if income is between 138-400% FPL for ACA marketplace subsidies.",
-        "params": {}
-      },
-      "condition_field": "income_fpl_percent",
-      "condition_operator": "<",
-      "condition_value": 400,
-      "true_next": "enroll_aca",
-      "false_next": "chip_check"
-    },
-    {
-      "id": "enroll_aca",
-      "type": "ACTION",
-      "metadata": {
-        "label": "ACA Marketplace Enrollment",
-        "description": "Guide through ACA marketplace plan selection with subsidy estimation.",
-        "params": {
-          "llm_prompt": "Estimate ACA subsidy for a household at {income_fpl_percent}% FPL."
-        }
-      }
-    },
-    {
-      "id": "chip_check",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "CHIP Eligible Children?",
-        "description": "Check if there are dependents under 19 who may qualify for CHIP.",
-        "params": {}
-      },
-      "condition_field": "has_children_under_19",
-      "condition_operator": "==",
-      "condition_value": true,
-      "true_next": "enroll_chip",
-      "false_next": "no_program_match"
-    },
-    {
-      "id": "enroll_chip",
-      "type": "ACTION",
-      "metadata": {
-        "label": "CHIP Enrollment",
-        "description": "Prepare CHIP application for eligible children.",
-        "params": {}
-      }
-    },
-    {
-      "id": "no_program_match",
-      "type": "ACTION",
-      "metadata": {
-        "label": "No Program Match",
-        "description": "Document that no government program matches. Flag for community resources.",
-        "params": {}
-      }
-    },
-    {
-      "id": "handoff_counselor",
-      "type": "HANDOFF",
-      "metadata": {
-        "label": "Benefits Counselor Review",
-        "description": "Hand off enrollment package to a benefits counselor for submission.",
-        "params": {}
-      }
-    }
+    { "id": "intake_start", "type": "ACTION", "metadata": { "label": "Case Intake Start" } },
+    { "id": "consent", "type": "APPROVAL", "metadata": { "label": "Consent & ROI" } },
+    { "id": "collect_household", "type": "ACTION", "metadata": { "label": "Household Data Collection", "description": "Size, income, state, dependents, ages, immigration status, disability, pregnancy." } },
+    { "id": "medicare_check", "type": "CONDITION", "metadata": { "label": "Medicare Eligible?" }, "condition_field": "medicare_eligible", "condition_operator": "==", "condition_value": true, "true_next": "medicare_path", "false_next": "household_split" },
+    { "id": "medicare_path", "type": "ACTION", "metadata": { "label": "Medicare Enrollment Path", "description": "Original Medicare, Part D, Medigap, MA plan selection, LIS, MSP screening." } },
+    { "id": "household_split", "type": "ACTION", "metadata": { "label": "Household Composition Split", "description": "Separate adults, children, pregnant members, disabled members for parallel eligibility." } },
+    { "id": "state_rule_lookup", "type": "ACTION", "metadata": { "label": "State Rule Lookup", "description": "Load state-specific Medicaid expansion status, MAGI thresholds, non-MAGI categories, waivers." } },
+    { "id": "document_intake", "type": "ACTION", "metadata": { "label": "Document Collection", "description": "Income proof, citizenship/immigration docs, residency, SSN, disability records." } },
+    { "id": "subsidy_calculator", "type": "ACTION", "metadata": { "label": "APTC/CSR Subsidy Calculator", "description": "Real PTC and CSR math based on FPL, age, region, plan benchmark." } },
+    { "id": "eligibility_matrix", "type": "ACTION", "metadata": { "label": "Eligibility Matrix", "description": "Run each household member through Medicaid, CHIP, ACA, Medicare Savings, ABD waivers." } },
+    { "id": "medicaid_branch", "type": "CONDITION", "metadata": { "label": "Any Medicaid Eligible?" }, "condition_field": "medicaid_eligible_count", "condition_operator": ">", "condition_value": 0, "true_next": "medicaid_application", "false_next": "chip_branch" },
+    { "id": "medicaid_application", "type": "ACTION", "metadata": { "label": "Medicaid Application", "description": "State-specific submission (e.g., Illinois ABE) for eligible members." } },
+    { "id": "chip_branch", "type": "CONDITION", "metadata": { "label": "Any CHIP Eligible Children?" }, "condition_field": "chip_eligible_count", "condition_operator": ">", "condition_value": 0, "true_next": "chip_application", "false_next": "aca_branch" },
+    { "id": "chip_application", "type": "ACTION", "metadata": { "label": "CHIP Application (e.g., All Kids)" } },
+    { "id": "aca_branch", "type": "CONDITION", "metadata": { "label": "Any ACA Eligible?" }, "condition_field": "aca_eligible_count", "condition_operator": ">", "condition_value": 0, "true_next": "sep_check", "false_next": "no_program_match" },
+    { "id": "sep_check", "type": "CONDITION", "metadata": { "label": "Open Enrollment or SEP?" }, "condition_field": "enrollment_window_open", "condition_operator": "==", "condition_value": true, "true_next": "plan_selection", "false_next": "sep_qualification" },
+    { "id": "sep_qualification", "type": "ACTION", "metadata": { "label": "SEP Qualifying Event Verification" } },
+    { "id": "plan_selection", "type": "ACTION", "metadata": { "label": "Plan Selection Engine", "description": "Compare premium, deductible, network, formulary, OOP max for household needs." } },
+    { "id": "aca_application", "type": "ACTION", "metadata": { "label": "ACA Marketplace Application", "description": "Submit via healthcare.gov or state exchange." } },
+    { "id": "no_program_match", "type": "ACTION", "metadata": { "label": "No Program Match", "description": "Document gap; route to community resource router and Guild." } },
+    { "id": "submission_tracker", "type": "ACTION", "metadata": { "label": "Submission Tracker", "description": "Track each program submission with confirmation number and SLA." } },
+    { "id": "determination_wait", "type": "ACTION", "metadata": { "label": "Determination Wait State" } },
+    { "id": "determination_received", "type": "CONDITION", "metadata": { "label": "Determination Received?" }, "condition_field": "all_determinations_in", "condition_operator": "==", "condition_value": true, "true_next": "determination_router", "false_next": "determination_router" },
+    { "id": "determination_router", "type": "CONDITION", "metadata": { "label": "Approved or Denied?" }, "condition_field": "any_denied", "condition_operator": "==", "condition_value": true, "true_next": "denial_appeal", "false_next": "enrollment_confirmation" },
+    { "id": "denial_appeal", "type": "ACTION", "metadata": { "label": "Eligibility Denial Appeal" } },
+    { "id": "enrollment_confirmation", "type": "ACTION", "metadata": { "label": "Enrollment Confirmation", "description": "Capture effective date, member IDs, plan details." } },
+    { "id": "premium_payment_setup", "type": "ACTION", "metadata": { "label": "Premium Payment Setup", "description": "Set up first month's premium and recurring payment." } },
+    { "id": "id_card_delivery", "type": "ACTION", "metadata": { "label": "ID Card & Welcome Packet Tracking" } },
+    { "id": "renewal_scheduler", "type": "ACTION", "metadata": { "label": "Renewal & Redetermination Scheduler" } },
+    { "id": "outcome_capture", "type": "ACTION", "metadata": { "label": "Outcome Capture", "description": "Members enrolled, programs, annual subsidy value, OOP savings." } },
+    { "id": "patient_notification", "type": "ACTION", "metadata": { "label": "Patient Notification" } },
+    { "id": "case_close", "type": "ACTION", "metadata": { "label": "Case Close" } }
   ],
   "edges": [
-    { "source": "collect_household", "target": "medicaid_eligible", "label": "data collected" },
-    { "source": "medicaid_eligible", "target": "enroll_medicaid", "label": "income < 138% FPL" },
-    { "source": "medicaid_eligible", "target": "aca_eligible", "label": "income >= 138% FPL" },
-    { "source": "enroll_medicaid", "target": "handoff_counselor", "label": "application prepared" },
-    { "source": "aca_eligible", "target": "enroll_aca", "label": "income < 400% FPL" },
-    { "source": "aca_eligible", "target": "chip_check", "label": "income >= 400% FPL" },
-    { "source": "enroll_aca", "target": "handoff_counselor", "label": "plan selected" },
-    { "source": "chip_check", "target": "enroll_chip", "label": "has children under 19" },
-    { "source": "chip_check", "target": "no_program_match", "label": "no eligible children" },
-    { "source": "enroll_chip", "target": "handoff_counselor", "label": "CHIP application ready" },
-    { "source": "no_program_match", "target": "handoff_counselor", "label": "flagged for resources" }
+    { "source": "intake_start", "target": "consent" },
+    { "source": "consent", "target": "collect_household" },
+    { "source": "collect_household", "target": "medicare_check" },
+    { "source": "medicare_check", "target": "medicare_path", "label": "yes" },
+    { "source": "medicare_check", "target": "household_split", "label": "no" },
+    { "source": "medicare_path", "target": "household_split" },
+    { "source": "household_split", "target": "state_rule_lookup" },
+    { "source": "state_rule_lookup", "target": "document_intake" },
+    { "source": "document_intake", "target": "subsidy_calculator" },
+    { "source": "subsidy_calculator", "target": "eligibility_matrix" },
+    { "source": "eligibility_matrix", "target": "medicaid_branch" },
+    { "source": "medicaid_branch", "target": "medicaid_application", "label": "eligible" },
+    { "source": "medicaid_branch", "target": "chip_branch", "label": "none" },
+    { "source": "medicaid_application", "target": "chip_branch" },
+    { "source": "chip_branch", "target": "chip_application", "label": "eligible" },
+    { "source": "chip_branch", "target": "aca_branch", "label": "none" },
+    { "source": "chip_application", "target": "aca_branch" },
+    { "source": "aca_branch", "target": "sep_check", "label": "eligible" },
+    { "source": "aca_branch", "target": "no_program_match", "label": "none" },
+    { "source": "sep_check", "target": "plan_selection", "label": "open" },
+    { "source": "sep_check", "target": "sep_qualification", "label": "closed" },
+    { "source": "sep_qualification", "target": "plan_selection" },
+    { "source": "plan_selection", "target": "aca_application" },
+    { "source": "aca_application", "target": "submission_tracker" },
+    { "source": "no_program_match", "target": "submission_tracker" },
+    { "source": "submission_tracker", "target": "determination_wait" },
+    { "source": "determination_wait", "target": "determination_received" },
+    { "source": "determination_received", "target": "determination_router", "label": "received" },
+    { "source": "determination_router", "target": "denial_appeal", "label": "denied" },
+    { "source": "determination_router", "target": "enrollment_confirmation", "label": "approved" },
+    { "source": "denial_appeal", "target": "enrollment_confirmation" },
+    { "source": "enrollment_confirmation", "target": "premium_payment_setup" },
+    { "source": "premium_payment_setup", "target": "id_card_delivery" },
+    { "source": "id_card_delivery", "target": "renewal_scheduler" },
+    { "source": "renewal_scheduler", "target": "outcome_capture" },
+    { "source": "outcome_capture", "target": "patient_notification" },
+    { "source": "patient_notification", "target": "case_close" }
   ]
 }

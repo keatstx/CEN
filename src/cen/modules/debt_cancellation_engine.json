@@ -1,90 +1,90 @@
 {
   "module_name": "debt_cancellation_engine",
-  "version": "1.0",
-  "description": "Audits medical bills for duplicate charges, No Surprises Act violations, and generates dispute letters.",
+  "version": "2.0",
+  "description": "End-to-end medical debt resolution: bill ingestion, payer/provider lookup, full audit battery, dispute generation, transmission, response tracking, multi-round negotiation, escalation routing, credit bureau remediation, savings ledger, and case closure.",
   "nodes": [
-    {
-      "id": "ingest_bill",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Bill Ingestion",
-        "description": "Ingest and parse the patient's itemized medical bill.",
-        "params": {}
-      }
-    },
-    {
-      "id": "audit_duplicates",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Duplicate Charge Audit",
-        "description": "Scan bill line items for duplicate or unbundled charges.",
-        "params": {
-          "llm_prompt": "Analyze the following medical bill for duplicate or unbundled charges: {bill_summary}"
-        }
-      }
-    },
-    {
-      "id": "audit_nsa",
-      "type": "ACTION",
-      "metadata": {
-        "label": "NSA Violation Audit",
-        "description": "Check for No Surprises Act violations such as out-of-network balance billing.",
-        "params": {
-          "llm_prompt": "Check the following bill for No Surprises Act violations: {bill_summary}"
-        }
-      }
-    },
-    {
-      "id": "violations_found",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Violations Found?",
-        "description": "Determine if any billing errors or violations were identified.",
-        "params": {}
-      },
-      "condition_field": "violations_count",
-      "condition_operator": ">",
-      "condition_value": 0,
-      "true_next": "generate_dispute",
-      "false_next": "flag_clean"
-    },
-    {
-      "id": "generate_dispute",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Generate Dispute Letter",
-        "description": "Draft a formal dispute letter citing identified billing errors and applicable regulations.",
-        "params": {
-          "llm_prompt": "Draft a dispute letter for the following billing violations: {bill_summary}"
-        }
-      }
-    },
-    {
-      "id": "flag_clean",
-      "type": "ACTION",
-      "metadata": {
-        "label": "Flag as Clean",
-        "description": "Mark the bill as reviewed with no actionable findings.",
-        "params": {}
-      }
-    },
-    {
-      "id": "handoff",
-      "type": "HANDOFF",
-      "metadata": {
-        "label": "Navigator Review",
-        "description": "Hand off audit results to a Community Equity Navigator for final action.",
-        "params": {}
-      }
-    }
+    { "id": "intake_start", "type": "ACTION", "metadata": { "label": "Case Intake Start" } },
+    { "id": "hipaa_consent", "type": "APPROVAL", "metadata": { "label": "HIPAA & Advocacy Consent" } },
+    { "id": "ingest_bill", "type": "ACTION", "metadata": { "label": "Bill Ingestion", "description": "Parse itemized bill, EOBs, and any collection notices." } },
+    { "id": "request_itemized", "type": "CONDITION", "metadata": { "label": "Itemized Bill Available?" }, "condition_field": "is_itemized", "condition_operator": "==", "condition_value": true, "true_next": "payer_provider_lookup", "false_next": "request_itemized_action" },
+    { "id": "request_itemized_action", "type": "ACTION", "metadata": { "label": "Request Itemized Bill", "description": "Send formal request to provider for itemized statement (federal right)." } },
+    { "id": "payer_provider_lookup", "type": "ACTION", "metadata": { "label": "Payer & Provider Lookup", "description": "Identify provider entity, billing office, payer, plan type, and routing addresses." } },
+    { "id": "sol_check", "type": "CONDITION", "metadata": { "label": "Statute of Limitations Check" }, "condition_field": "within_sol", "condition_operator": "==", "condition_value": true, "true_next": "audit_battery", "false_next": "sol_defense" },
+    { "id": "sol_defense", "type": "ACTION", "metadata": { "label": "Time-Barred Debt Defense", "description": "Generate cease-collection letter citing expired SOL." } },
+    { "id": "audit_battery", "type": "ACTION", "metadata": { "label": "Full Audit Battery", "description": "Run all audits in parallel: duplicates, unbundling, upcoding, CPT/HCPCS validity, charge master comparison, contractual adjustments, NSA, COB, timely filing." } },
+    { "id": "audit_duplicates", "type": "ACTION", "metadata": { "label": "Duplicate/Unbundled Audit" } },
+    { "id": "audit_upcoding", "type": "ACTION", "metadata": { "label": "Upcoding Audit" } },
+    { "id": "audit_chargemaster", "type": "ACTION", "metadata": { "label": "Chargemaster vs Reasonable Rate Audit" } },
+    { "id": "audit_nsa", "type": "ACTION", "metadata": { "label": "No Surprises Act Audit" } },
+    { "id": "audit_cob", "type": "ACTION", "metadata": { "label": "Coordination of Benefits Audit" } },
+    { "id": "audit_timely", "type": "ACTION", "metadata": { "label": "Timely Filing Audit" } },
+    { "id": "consolidate_findings", "type": "ACTION", "metadata": { "label": "Consolidate Findings" } },
+    { "id": "violations_found", "type": "CONDITION", "metadata": { "label": "Violations Found?" }, "condition_field": "violations_count", "condition_operator": ">", "condition_value": 0, "true_next": "generate_dispute", "false_next": "no_violation_router" },
+    { "id": "no_violation_router", "type": "CONDITION", "metadata": { "label": "Hardship or Payment Plan Path?" }, "condition_field": "hardship_indicated", "condition_operator": "==", "condition_value": true, "true_next": "hardship_negotiation", "false_next": "payment_plan_setup" },
+    { "id": "hardship_negotiation", "type": "ACTION", "metadata": { "label": "Hardship Negotiation Letter" } },
+    { "id": "payment_plan_setup", "type": "ACTION", "metadata": { "label": "Payment Plan Setup" } },
+    { "id": "generate_dispute", "type": "ACTION", "metadata": { "label": "Generate Dispute Letter", "description": "Draft dispute letter citing each violation with statutory references." } },
+    { "id": "counselor_qa", "type": "APPROVAL", "metadata": { "label": "Counselor QA Review" } },
+    { "id": "transmit_dispute", "type": "ACTION", "metadata": { "label": "Transmit Dispute", "description": "Send via certified mail, fax, and provider portal with delivery confirmation." } },
+    { "id": "response_wait", "type": "ACTION", "metadata": { "label": "Response Wait State", "description": "30-day SLA timer for provider/payer response." } },
+    { "id": "response_received", "type": "CONDITION", "metadata": { "label": "Response Received?" }, "condition_field": "response_status", "condition_operator": "in", "condition_value": ["accepted", "partial", "rejected", "no_response"], "true_next": "negotiation_router", "false_next": "negotiation_router" },
+    { "id": "negotiation_router", "type": "CONDITION", "metadata": { "label": "Negotiation Router" }, "condition_field": "response_status", "condition_operator": "==", "condition_value": "accepted", "true_next": "credit_bureau_dispute", "false_next": "negotiation_round" },
+    { "id": "negotiation_round", "type": "ACTION", "metadata": { "label": "Negotiation Round", "description": "Counter-offer or supplemental dispute. Loop up to 3 rounds." } },
+    { "id": "negotiation_continue", "type": "CONDITION", "metadata": { "label": "Continue Negotiation?" }, "condition_field": "negotiation_round_count", "condition_operator": "<", "condition_value": 3, "true_next": "escalation_router", "false_next": "escalation_router" },
+    { "id": "escalation_router", "type": "ACTION", "metadata": { "label": "Escalation Router", "description": "Route to IL AG, CFPB, state insurance dept, IL Medical Debt Relief Program, or Guild attorney." } },
+    { "id": "il_medical_debt_relief", "type": "ACTION", "metadata": { "label": "IL Medical Debt Relief Program Submission" } },
+    { "id": "credit_bureau_dispute", "type": "ACTION", "metadata": { "label": "Credit Bureau Dispute", "description": "File disputes with Equifax, Experian, TransUnion under FCRA and CFPB medical debt rule." } },
+    { "id": "credit_bureau_outcome", "type": "ACTION", "metadata": { "label": "Credit Bureau Outcome Capture" } },
+    { "id": "savings_ledger", "type": "ACTION", "metadata": { "label": "Savings Ledger", "description": "Record dollars disputed, dollars eliminated, dollars remaining, hours saved." } },
+    { "id": "patient_notification", "type": "ACTION", "metadata": { "label": "Patient Notification" } },
+    { "id": "remaining_balance_check", "type": "CONDITION", "metadata": { "label": "Remaining Balance > 0?" }, "condition_field": "remaining_balance", "condition_operator": ">", "condition_value": 0, "true_next": "case_close_success", "false_next": "case_close_success" },
+    { "id": "case_close_success", "type": "ACTION", "metadata": { "label": "Case Close: Success" } }
   ],
   "edges": [
-    { "source": "ingest_bill", "target": "audit_duplicates", "label": "bill parsed" },
-    { "source": "audit_duplicates", "target": "audit_nsa", "label": "duplicates checked" },
-    { "source": "audit_nsa", "target": "violations_found", "label": "nsa checked" },
-    { "source": "violations_found", "target": "generate_dispute", "label": "violations > 0" },
-    { "source": "violations_found", "target": "flag_clean", "label": "no violations" },
-    { "source": "generate_dispute", "target": "handoff", "label": "dispute drafted" },
-    { "source": "flag_clean", "target": "handoff", "label": "review complete" }
+    { "source": "intake_start", "target": "hipaa_consent" },
+    { "source": "hipaa_consent", "target": "ingest_bill" },
+    { "source": "ingest_bill", "target": "request_itemized" },
+    { "source": "request_itemized", "target": "payer_provider_lookup", "label": "itemized" },
+    { "source": "request_itemized", "target": "request_itemized_action", "label": "summary only" },
+    { "source": "request_itemized_action", "target": "payer_provider_lookup" },
+    { "source": "payer_provider_lookup", "target": "sol_check" },
+    { "source": "sol_check", "target": "audit_battery", "label": "within SOL" },
+    { "source": "sol_check", "target": "sol_defense", "label": "expired" },
+    { "source": "sol_defense", "target": "transmit_dispute" },
+    { "source": "audit_battery", "target": "audit_duplicates" },
+    { "source": "audit_battery", "target": "audit_upcoding" },
+    { "source": "audit_battery", "target": "audit_chargemaster" },
+    { "source": "audit_battery", "target": "audit_nsa" },
+    { "source": "audit_battery", "target": "audit_cob" },
+    { "source": "audit_battery", "target": "audit_timely" },
+    { "source": "audit_duplicates", "target": "consolidate_findings" },
+    { "source": "audit_upcoding", "target": "consolidate_findings" },
+    { "source": "audit_chargemaster", "target": "consolidate_findings" },
+    { "source": "audit_nsa", "target": "consolidate_findings" },
+    { "source": "audit_cob", "target": "consolidate_findings" },
+    { "source": "audit_timely", "target": "consolidate_findings" },
+    { "source": "consolidate_findings", "target": "violations_found" },
+    { "source": "violations_found", "target": "generate_dispute", "label": "violations" },
+    { "source": "violations_found", "target": "no_violation_router", "label": "clean" },
+    { "source": "no_violation_router", "target": "hardship_negotiation", "label": "hardship" },
+    { "source": "no_violation_router", "target": "payment_plan_setup", "label": "no hardship" },
+    { "source": "hardship_negotiation", "target": "transmit_dispute" },
+    { "source": "generate_dispute", "target": "counselor_qa" },
+    { "source": "counselor_qa", "target": "transmit_dispute", "label": "approved" },
+    { "source": "transmit_dispute", "target": "response_wait" },
+    { "source": "response_wait", "target": "response_received" },
+    { "source": "response_received", "target": "negotiation_router", "label": "received" },
+    { "source": "negotiation_router", "target": "credit_bureau_dispute", "label": "accepted" },
+    { "source": "negotiation_router", "target": "negotiation_round", "label": "partial/rejected" },
+    { "source": "negotiation_round", "target": "negotiation_continue" },
+    { "source": "negotiation_continue", "target": "escalation_router", "label": "max rounds" },
+    { "source": "escalation_router", "target": "il_medical_debt_relief" },
+    { "source": "il_medical_debt_relief", "target": "credit_bureau_dispute" },
+    { "source": "credit_bureau_dispute", "target": "credit_bureau_outcome" },
+    { "source": "credit_bureau_outcome", "target": "savings_ledger" },
+    { "source": "payment_plan_setup", "target": "savings_ledger" },
+    { "source": "savings_ledger", "target": "patient_notification" },
+    { "source": "patient_notification", "target": "remaining_balance_check" },
+    { "source": "remaining_balance_check", "target": "case_close_success" }
   ]
 }

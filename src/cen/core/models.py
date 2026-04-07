@@ -28,8 +28,10 @@ class AOPNode(BaseModel):
     condition_field: Optional[str] = None
     condition_operator: Optional[str] = None
     condition_value: Optional[Any] = None
+    condition_value_field: Optional[str] = None
     true_next: Optional[str] = None
     false_next: Optional[str] = None
+    branches: Optional[Dict[str, str]] = None
 
 
 class AOPEdge(BaseModel):
@@ -39,6 +41,7 @@ class AOPEdge(BaseModel):
 
 
 class AOPDefinition(BaseModel):
+    model_config = {"extra": "ignore"}
     module_name: str
     version: str = "1.0"
     description: str = ""
