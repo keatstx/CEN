@@ -54,10 +54,36 @@ def _configure_structlog(settings: Settings) -> None:
     )
 
 
+def _enforce_deployment_mode(settings: Settings) -> None:
+    """Refuse to start in production mode if hardening prerequisites are not met.
+
+    v1 ships with `deployment_mode=synthetic` by default. The synthetic
+    mode is for development against fake data — it places no
+    restrictions on the LLM backend and shows a loud banner in the UI.
+
+    `deployment_mode=production` is the operator's explicit attestation
+    that the deployment is going to receive real PHI. In that mode:
+    - The `api` LLM backend is only allowed if `llm_baa_confirmed=True`
+      (the operator has signed a Business Associate Agreement with the
+      provider). Otherwise startup fails — better a hard error than
+      silently leaking PHI to a non-BAA'd third party.
+    - `mock` and `gguf` (local) backends are always allowed.
+    """
+    if settings.deployment_mode == "production" and settings.llm_backend == "api":
+        if not settings.llm_baa_confirmed:
+            raise RuntimeError(
+                "CEN_DEPLOYMENT_MODE=production requires CEN_LLM_BAA_CONFIRMED=true "
+                "when CEN_LLM_BACKEND=api. Either sign a BAA with your LLM provider "
+                "and set CEN_LLM_BAA_CONFIRMED=true, or switch to a local backend "
+                "(CEN_LLM_BACKEND=gguf|mock)."
+            )
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     if settings is None:
         settings = Settings()
 
+    _enforce_deployment_mode(settings)
     _configure_structlog(settings)
 
     # Session store + project store + audit store — created here, init/close via lifespan

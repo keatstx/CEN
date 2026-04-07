@@ -9,6 +9,7 @@ export interface ReadyResponse {
   modules_loaded: string[];
   llm_backend: string;
   llm_available: boolean;
+  deployment_mode: "synthetic" | "production";
 }
 
 export interface WorkflowInput {
@@ -26,11 +27,25 @@ export interface WorkflowResult {
 export interface Session {
   id: string;
   module_name: string;
-  status: "ACTIVE" | "AWAITING_APPROVAL" | "COMPLETED" | "FAILED";
+  module_version: string;
+  name: string;
+  status: "ACTIVE" | "AWAITING_APPROVAL" | "AWAITING_INPUT" | "COMPLETED" | "FAILED";
   context: Record<string, unknown>;
   executed_nodes: string[];
   pending_node: string | null;
   approved_nodes: string[];
+  owner_id: string | null;
+  project_id: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -4,7 +4,7 @@ import { MODULE_CONFIGS, type FieldConfig } from "../types";
 interface Props {
   moduleName: string;
   loading: boolean;
-  sessionStatus: "ACTIVE" | "AWAITING_APPROVAL" | "COMPLETED" | "FAILED" | null;
+  sessionStatus: "ACTIVE" | "AWAITING_APPROVAL" | "AWAITING_INPUT" | "COMPLETED" | "FAILED" | null;
   onExecute: (context: Record<string, unknown>) => void;
   onNewSession: () => void;
 }

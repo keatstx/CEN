@@ -169,6 +169,7 @@ class ReadyResponse(BaseModel):
     modules_loaded: List[str]
     llm_backend: str
     llm_available: bool
+    deployment_mode: str = "synthetic"
 
 
 class AuditEntry(BaseModel):

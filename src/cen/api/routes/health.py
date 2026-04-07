@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from cen.api.dependencies import get_engines, get_llm
+from cen.api.dependencies import get_engines, get_llm, get_settings
+from cen.config import Settings
 from cen.core.models import HealthResponse, ReadyResponse
 
 router = APIRouter()
@@ -19,10 +20,12 @@ async def health():
 async def ready(
     engines: dict = Depends(get_engines),
     llm=Depends(get_llm),
+    settings: Settings = Depends(get_settings),
 ):
     return ReadyResponse(
         status="ok",
         modules_loaded=list(engines.keys()),
         llm_backend=llm.backend_name,
         llm_available=await llm.is_available(),
+        deployment_mode=settings.deployment_mode,
     )
