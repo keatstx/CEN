@@ -15,37 +15,51 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from cen.api.dependencies import get_project_store
-from cen.core.models import Project, ProjectCreate, ProjectUpdate
+from cen.api.dependencies import get_current_user, get_project_store
+from cen.core.models import Project, ProjectCreate, ProjectUpdate, User
 from cen.core.project_store import ProjectStore
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+def _check_owner(project: Project, user: User) -> None:
+    """Reject cross-tenant access. Even with the v1 stub user, this
+    enforcement path runs on every request — it's the multi-tenant
+    isolation hook that lights up when real auth lands."""
+    if project.owner_id is not None and project.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found")
 
 
 @router.post("", response_model=Project, status_code=201)
 async def create_project(
     body: ProjectCreate,
     store: ProjectStore = Depends(get_project_store),
+    user: User = Depends(get_current_user),
 ) -> Project:
-    return await store.create(name=body.name, description=body.description)
+    return await store.create(
+        name=body.name, description=body.description, owner_id=user.id
+    )
 
 
 @router.get("", response_model=list[Project])
 async def list_projects(
     limit: int = Query(default=50, ge=1, le=500),
     store: ProjectStore = Depends(get_project_store),
+    user: User = Depends(get_current_user),
 ) -> List[Project]:
-    return await store.list_projects(limit=limit)
+    return await store.list_projects(owner_id=user.id, limit=limit)
 
 
 @router.get("/{project_id}", response_model=Project)
 async def get_project(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
+    user: User = Depends(get_current_user),
 ) -> Project:
     project = await store.get(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    _check_owner(project, user)
     return project
 
 
@@ -54,12 +68,16 @@ async def update_project(
     project_id: str,
     body: ProjectUpdate,
     store: ProjectStore = Depends(get_project_store),
+    user: User = Depends(get_current_user),
 ) -> Project:
+    existing = await store.get(project_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    _check_owner(existing, user)
     updated = await store.update(
         project_id, name=body.name, description=body.description
     )
-    if updated is None:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    assert updated is not None
     return updated
 
 
@@ -67,7 +85,10 @@ async def update_project(
 async def delete_project(
     project_id: str,
     store: ProjectStore = Depends(get_project_store),
+    user: User = Depends(get_current_user),
 ) -> None:
-    deleted = await store.delete(project_id)
-    if not deleted:
+    existing = await store.get(project_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    _check_owner(existing, user)
+    await store.delete(project_id)

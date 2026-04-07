@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
+from fastapi import Header, HTTPException, status
 
 from cen.config import Settings
+from cen.core.models import User
+
+
+# v1 stub operator returned when auth is disabled (operator_password = "").
+# The fixed id ensures all v1 cases share the same owner_id, which keeps
+# the multi-tenant filter path exercised even before real auth lands.
+_DEV_STUB_USER = User(id="default-operator", name="Default Operator")
 
 if TYPE_CHECKING:
     from cen.core.audit_store import AuditStore
@@ -76,3 +85,37 @@ def get_audit_store() -> AuditStore:
 def get_event_bus() -> AsyncEventBus:
     assert _event_bus is not None
     return _event_bus
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(default=None),
+) -> User:
+    """Authenticate the request and return the current operator.
+
+    v1 model:
+    - If `CEN_OPERATOR_PASSWORD` is empty (the default in dev/test),
+      auth is disabled and a stub user is returned. Every request gets
+      `owner_id="default-operator"`. This keeps multi-tenant filter
+      paths exercised even with no real auth.
+    - If `CEN_OPERATOR_PASSWORD` is set, the request must include
+      `Authorization: Bearer <password>`. The password is the bearer
+      token (single shared password — prototype only). Real JWT and
+      per-user accounts come in a future hardening milestone.
+    """
+    settings = get_settings()
+    if not settings.operator_password:
+        return _DEV_STUB_USER
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = authorization.split(None, 1)[1].strip()
+    if token != settings.operator_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return _DEV_STUB_USER

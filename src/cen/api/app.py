@@ -25,7 +25,7 @@ from cen.telemetry.handlers import AuditHandlers, TelemetryHandlers
 from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
-from cen.api.routes import health, llm, modules, workflows
+from cen.api.routes import auth, health, llm, modules, workflows
 from cen.api.routes import projects, sessions
 
 logger = structlog.get_logger()
@@ -145,6 +145,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workflows.router)
     app.include_router(llm.router)
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(sessions.router)
     app.include_router(projects.router)
     app.include_router(modules.router)

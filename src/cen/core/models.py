@@ -61,6 +61,29 @@ class WorkflowResult(BaseModel):
     context: Dict[str, Any]
 
 
+class User(BaseModel):
+    """Operator identity returned by the auth dependency.
+
+    v1 is single-operator with a stub user. When real auth lands, this
+    becomes the authenticated user from the JWT/session token. The
+    `id` field is what gets stored in `Session.owner_id` and
+    `Project.owner_id` so the multi-tenant enforcement hook is in place
+    from day one.
+    """
+
+    id: str
+    name: str = ""
+
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 class Project(BaseModel):
     """A project represents a patient (or matter) under which one or more
     cases run. Demographics, identity documents, insurance cards, and
