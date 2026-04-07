@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import type { AOPDefinition, AOPNode, AOPEdge } from "../types";
 import { MODULE_CONFIGS } from "../types";
 import { fetchModule } from "../api";
@@ -16,10 +16,11 @@ const NODE_COLORS: Record<string, { fill: string; stroke: string; text: string }
 
 const NODE_W = 180;
 const NODE_H = 52;
-const LAYER_GAP_Y = 100;
-const COL_GAP_X = 220;
-const PAD_X = 60;
-const PAD_Y = 40;
+const LAYER_GAP = 100;   // gap between layers (along flow direction)
+const COL_GAP = 40;      // gap between siblings (perpendicular to flow)
+const PAD = 60;
+
+type Direction = "TB" | "LR";
 
 // ── Topological layered layout ──
 
@@ -30,8 +31,7 @@ interface LayoutNode {
   node: AOPNode;
 }
 
-function layoutDAG(nodes: AOPNode[], edges: AOPEdge[]) {
-  // Build adjacency + in-degree
+function layoutDAG(nodes: AOPNode[], edges: AOPEdge[], dir: Direction) {
   const adj = new Map<string, string[]>();
   const inDeg = new Map<string, number>();
   for (const n of nodes) {
@@ -43,7 +43,6 @@ function layoutDAG(nodes: AOPNode[], edges: AOPEdge[]) {
     inDeg.set(e.target, (inDeg.get(e.target) ?? 0) + 1);
   }
 
-  // Kahn's algorithm → assign layers
   const layer = new Map<string, number>();
   const queue: string[] = [];
   for (const n of nodes) {
@@ -60,7 +59,6 @@ function layoutDAG(nodes: AOPNode[], edges: AOPEdge[]) {
     }
   }
 
-  // Group nodes by layer
   const layers = new Map<number, string[]>();
   for (const n of nodes) {
     const l = layer.get(n.id) ?? 0;
@@ -71,44 +69,65 @@ function layoutDAG(nodes: AOPNode[], edges: AOPEdge[]) {
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
   const positioned: LayoutNode[] = [];
 
-  const maxLayerWidth = Math.max(...[...layers.values()].map((l) => l.length));
+  // Per-direction step sizes
+  const stepLayer = dir === "TB" ? NODE_H + LAYER_GAP : NODE_W + LAYER_GAP;
+  const stepSibling = dir === "TB" ? NODE_W + COL_GAP : NODE_H + COL_GAP;
+
+  const maxLayerCount = Math.max(...[...layers.values()].map((l) => l.length));
+  const sectionSize = maxLayerCount * stepSibling;
 
   for (const [layerIdx, ids] of layers) {
-    const totalWidth = ids.length * COL_GAP_X;
-    const startX = (maxLayerWidth * COL_GAP_X - totalWidth) / 2 + PAD_X;
+    const total = ids.length * stepSibling;
+    const start = (sectionSize - total) / 2 + PAD;
     ids.forEach((id, col) => {
+      const along = PAD + layerIdx * stepLayer;
+      const across = start + col * stepSibling;
       positioned.push({
         id,
-        x: startX + col * COL_GAP_X,
-        y: PAD_Y + layerIdx * LAYER_GAP_Y,
+        x: dir === "TB" ? across : along,
+        y: dir === "TB" ? along : across,
         node: nodeMap.get(id)!,
       });
     });
   }
 
   const maxLayer = Math.max(...layers.keys(), 0);
-  const svgW = Math.max(maxLayerWidth * COL_GAP_X + PAD_X * 2, 400);
-  const svgH = (maxLayer + 1) * LAYER_GAP_Y + PAD_Y * 2;
+  const alongTotal = (maxLayer + 1) * stepLayer + PAD * 2;
+  const acrossTotal = sectionSize + PAD * 2;
+  const svgW = dir === "TB" ? acrossTotal : alongTotal;
+  const svgH = dir === "TB" ? alongTotal : acrossTotal;
 
-  return { positioned, svgW, svgH };
+  return { positioned, svgW: Math.max(svgW, 400), svgH: Math.max(svgH, 300) };
 }
 
 // ── Edge path with arrowhead ──
 
 function EdgePath({
-  sx, sy, tx, ty, label,
+  sx, sy, tx, ty, label, dir,
 }: {
-  sx: number; sy: number; tx: number; ty: number; label: string;
+  sx: number; sy: number; tx: number; ty: number; label: string; dir: Direction;
 }) {
-  const midY = (sy + ty) / 2;
-  const d = `M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}`;
+  let d: string;
+  let labelX: number;
+  let labelY: number;
+  if (dir === "TB") {
+    const midY = (sy + ty) / 2;
+    d = `M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}`;
+    labelX = (sx + tx) / 2;
+    labelY = midY - 6;
+  } else {
+    const midX = (sx + tx) / 2;
+    d = `M${sx},${sy} C${midX},${sy} ${midX},${ty} ${tx},${ty}`;
+    labelX = midX;
+    labelY = (sy + ty) / 2 - 6;
+  }
   return (
     <g>
       <path d={d} fill="none" stroke="var(--color-border-hover)" strokeWidth={1.5} markerEnd="url(#arrow)" />
       {label && (
         <text
-          x={(sx + tx) / 2}
-          y={midY - 6}
+          x={labelX}
+          y={labelY}
           textAnchor="middle"
           fontSize={10}
           fill="var(--color-text-muted)"
@@ -137,10 +156,7 @@ function NodeRect({
   const typeLabel = ln.node.type;
 
   return (
-    <g
-      onClick={onClick}
-      style={{ cursor: "pointer" }}
-    >
+    <g onClick={onClick} style={{ cursor: "pointer" }}>
       <rect
         x={ln.x}
         y={ln.y}
@@ -224,6 +240,172 @@ function DetailPanel({ node }: { node: AOPNode }) {
   );
 }
 
+// ── Pan/Zoom canvas ──
+
+interface CanvasProps {
+  aop: AOPDefinition;
+  layout: ReturnType<typeof layoutDAG>;
+  posMap: Map<string, LayoutNode>;
+  selectedNode: string | null;
+  setSelectedNode: (id: string | null) => void;
+  dir: Direction;
+  className?: string;
+}
+
+function DAGCanvas({
+  aop, layout, posMap, selectedNode, setSelectedNode, dir, className,
+}: CanvasProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const dragging = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  const fit = useCallback(() => {
+    const c = containerRef.current;
+    if (!c) return;
+    const cw = c.clientWidth;
+    const ch = c.clientHeight;
+    if (cw <= 0 || ch <= 0) return;
+    const z = Math.min(cw / layout.svgW, ch / layout.svgH, 1);
+    setZoom(z);
+    setTx((cw - layout.svgW * z) / 2);
+    setTy((ch - layout.svgH * z) / 2);
+  }, [layout.svgW, layout.svgH]);
+
+  useEffect(() => {
+    fit();
+  }, [fit]);
+
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const c = containerRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = Math.max(0.1, Math.min(4, zoom * factor));
+    // Keep mouse anchor stable
+    const wx = (mx - tx) / zoom;
+    const wy = (my - ty) / zoom;
+    setZoom(newZoom);
+    setTx(mx - wx * newZoom);
+    setTy(my - wy * newZoom);
+  };
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as Element).closest("g[data-node]")) return;
+    dragging.current = { x: e.clientX, y: e.clientY, tx, ty };
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragging.current) return;
+    setTx(dragging.current.tx + (e.clientX - dragging.current.x));
+    setTy(dragging.current.ty + (e.clientY - dragging.current.y));
+  };
+  const onMouseUp = () => {
+    dragging.current = null;
+  };
+
+  return (
+    <div className={`relative ${className ?? ""}`}>
+      {/* Toolbar */}
+      <div className="absolute top-2 right-2 z-10 flex gap-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md p-1 shadow-sm">
+        <button
+          className="px-2 py-1 text-xs hover:bg-[var(--color-bg)] rounded"
+          onClick={() => setZoom((z) => Math.min(4, z * 1.2))}
+          title="Zoom in"
+        >+</button>
+        <button
+          className="px-2 py-1 text-xs hover:bg-[var(--color-bg)] rounded"
+          onClick={() => setZoom((z) => Math.max(0.1, z / 1.2))}
+          title="Zoom out"
+        >−</button>
+        <button
+          className="px-2 py-1 text-xs hover:bg-[var(--color-bg)] rounded"
+          onClick={fit}
+          title="Fit to screen"
+        >Fit</button>
+        <button
+          className="px-2 py-1 text-xs hover:bg-[var(--color-bg)] rounded"
+          onClick={() => { setZoom(1); setTx(0); setTy(0); }}
+          title="100%"
+        >1:1</button>
+        <span className="px-1 text-[10px] text-[var(--color-text-muted)] self-center font-mono">
+          {Math.round(zoom * 100)}%
+        </span>
+      </div>
+
+      <div
+        ref={containerRef}
+        onWheel={onWheel}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+        className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
+        style={{ touchAction: "none" }}
+      >
+        <svg
+          width={layout.svgW}
+          height={layout.svgH}
+          viewBox={`0 0 ${layout.svgW} ${layout.svgH}`}
+          style={{
+            transform: `translate(${tx}px, ${ty}px) scale(${zoom})`,
+            transformOrigin: "0 0",
+            display: "block",
+          }}
+        >
+          <defs>
+            <marker
+              id="arrow"
+              viewBox="0 0 10 10"
+              refX={9}
+              refY={5}
+              markerWidth={7}
+              markerHeight={7}
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-border-hover)" />
+            </marker>
+          </defs>
+
+          {aop.edges.map((e) => {
+            const src = posMap.get(e.source);
+            const tgt = posMap.get(e.target);
+            if (!src || !tgt) return null;
+            const sx = dir === "TB" ? src.x + NODE_W / 2 : src.x + NODE_W;
+            const sy = dir === "TB" ? src.y + NODE_H : src.y + NODE_H / 2;
+            const tx2 = dir === "TB" ? tgt.x + NODE_W / 2 : tgt.x;
+            const ty2 = dir === "TB" ? tgt.y : tgt.y + NODE_H / 2;
+            return (
+              <EdgePath
+                key={`${e.source}-${e.target}`}
+                sx={sx}
+                sy={sy}
+                tx={tx2}
+                ty={ty2}
+                label={e.label}
+                dir={dir}
+              />
+            );
+          })}
+
+          {layout.positioned.map((ln) => (
+            <g key={ln.id} data-node>
+              <NodeRect
+                ln={ln}
+                selected={selectedNode === ln.id}
+                onClick={() => setSelectedNode(selectedNode === ln.id ? null : ln.id)}
+              />
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──
 
 interface Props {
@@ -237,6 +419,8 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
+  const [dir, setDir] = useState<Direction>("TB");
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     if (!selectedModule) {
@@ -253,10 +437,19 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
       .finally(() => setLoading(false));
   }, [selectedModule]);
 
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
+
   const layout = useMemo(() => {
     if (!aop) return null;
-    return layoutDAG(aop.nodes, aop.edges);
-  }, [aop]);
+    return layoutDAG(aop.nodes, aop.edges, dir);
+  }, [aop, dir]);
 
   const posMap = useMemo(() => {
     if (!layout) return new Map<string, LayoutNode>();
@@ -265,129 +458,148 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
 
   const activeNode = aop?.nodes.find((n) => n.id === selectedNode) ?? null;
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-      {/* Left — module selector + detail */}
-      <div className="lg:col-span-2 space-y-6">
-        <div className="card">
-          <div className="space-y-3">
-            <label
-              htmlFor="dag-module-select"
-              className="block text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
-            >
-              Module
-            </label>
-            <select
-              id="dag-module-select"
-              value={selectedModule}
-              onChange={(e) => onModuleChange(e.target.value)}
-            >
-              <option value="">— Choose a module —</option>
-              {modules.map((m) => (
-                <option key={m} value={m}>
-                  {MODULE_CONFIGS[m]?.label ?? m}
-                </option>
-              ))}
-            </select>
-            {aop && (
-              <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
-                {aop.description || MODULE_CONFIGS[selectedModule]?.description}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {aop && (
-          <div className="card">
-            <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
-              <span>{aop.nodes.length} nodes</span>
-              <span>{aop.edges.length} edges</span>
-              <span>v{aop.version}</span>
-            </div>
-          </div>
-        )}
-
-        {/* Legend */}
-        {aop && (
-          <div className="card space-y-2">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Legend</p>
-            <div className="flex flex-wrap gap-3">
-              {Object.entries(NODE_COLORS).map(([type, c]) => (
-                <div key={type} className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.stroke }} />
-                  <span className="text-[11px] text-[var(--color-text-secondary)]">{type}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeNode && <DetailPanel node={activeNode} />}
+  const toolbar = (
+    <div className="flex items-center gap-2">
+      <div className="flex border border-[var(--color-border)] rounded-md overflow-hidden">
+        <button
+          className={`px-2 py-1 text-xs ${dir === "TB" ? "bg-[var(--color-bg)] font-semibold" : ""}`}
+          onClick={() => setDir("TB")}
+          title="Top to bottom"
+        >↓ TB</button>
+        <button
+          className={`px-2 py-1 text-xs ${dir === "LR" ? "bg-[var(--color-bg)] font-semibold" : ""}`}
+          onClick={() => setDir("LR")}
+          title="Left to right"
+        >→ LR</button>
       </div>
-
-      {/* Right — SVG canvas */}
-      <div className="lg:col-span-3">
-        <div className="card min-h-[300px] flex items-center justify-center overflow-auto">
-          {loading && (
-            <p className="text-sm text-[var(--color-text-muted)]">Loading graph...</p>
-          )}
-          {error && (
-            <p className="text-sm text-[var(--color-danger)]">{error}</p>
-          )}
-          {!selectedModule && !loading && (
-            <p className="text-subtle text-center">Select a module to view its workflow graph.</p>
-          )}
-          {layout && aop && (
-            <svg
-              width={layout.svgW}
-              height={layout.svgH}
-              viewBox={`0 0 ${layout.svgW} ${layout.svgH}`}
-              className="block"
-            >
-              <defs>
-                <marker
-                  id="arrow"
-                  viewBox="0 0 10 10"
-                  refX={9}
-                  refY={5}
-                  markerWidth={7}
-                  markerHeight={7}
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--color-border-hover)" />
-                </marker>
-              </defs>
-
-              {/* Edges */}
-              {aop.edges.map((e) => {
-                const src = posMap.get(e.source);
-                const tgt = posMap.get(e.target);
-                if (!src || !tgt) return null;
-                return (
-                  <EdgePath
-                    key={`${e.source}-${e.target}`}
-                    sx={src.x + NODE_W / 2}
-                    sy={src.y + NODE_H}
-                    tx={tgt.x + NODE_W / 2}
-                    ty={tgt.y}
-                    label={e.label}
-                  />
-                );
-              })}
-
-              {/* Nodes */}
-              {layout.positioned.map((ln) => (
-                <NodeRect
-                  key={ln.id}
-                  ln={ln}
-                  selected={selectedNode === ln.id}
-                  onClick={() => setSelectedNode(selectedNode === ln.id ? null : ln.id)}
-                />
-              ))}
-            </svg>
-          )}
-        </div>
-      </div>
+      <button
+        className="px-2 py-1 text-xs border border-[var(--color-border)] rounded-md hover:bg-[var(--color-bg)]"
+        onClick={() => setFullscreen((f) => !f)}
+        title={fullscreen ? "Exit fullscreen (Esc)" : "Fullscreen"}
+      >{fullscreen ? "Exit ⛶" : "⛶ Fullscreen"}</button>
     </div>
+  );
+
+  return (
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+        {/* Left — module selector + detail */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="card">
+            <div className="space-y-3">
+              <label
+                htmlFor="dag-module-select"
+                className="block text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
+              >
+                Module
+              </label>
+              <select
+                id="dag-module-select"
+                value={selectedModule}
+                onChange={(e) => onModuleChange(e.target.value)}
+              >
+                <option value="">— Choose a module —</option>
+                {modules.map((m) => (
+                  <option key={m} value={m}>
+                    {MODULE_CONFIGS[m]?.label ?? m}
+                  </option>
+                ))}
+              </select>
+              {aop && (
+                <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                  {aop.description || MODULE_CONFIGS[selectedModule]?.description}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {aop && (
+            <div className="card">
+              <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+                <span>{aop.nodes.length} nodes</span>
+                <span>{aop.edges.length} edges</span>
+                <span>v{aop.version}</span>
+              </div>
+            </div>
+          )}
+
+          {aop && (
+            <div className="card space-y-2">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Legend</p>
+              <div className="flex flex-wrap gap-3">
+                {Object.entries(NODE_COLORS).map(([type, c]) => (
+                  <div key={type} className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.stroke }} />
+                    <span className="text-[11px] text-[var(--color-text-secondary)]">{type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeNode && <DetailPanel node={activeNode} />}
+        </div>
+
+        {/* Right — canvas */}
+        <div className="lg:col-span-3">
+          <div className="card p-2">
+            {aop && (
+              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                <span className="text-[11px] text-[var(--color-text-muted)]">
+                  Drag to pan · Scroll to zoom
+                </span>
+                {toolbar}
+              </div>
+            )}
+            <div className="h-[600px] flex items-center justify-center bg-[var(--color-bg)] rounded">
+              {loading && <p className="text-sm text-[var(--color-text-muted)]">Loading graph...</p>}
+              {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
+              {!selectedModule && !loading && (
+                <p className="text-subtle text-center">Select a module to view its workflow graph.</p>
+              )}
+              {layout && aop && !fullscreen && (
+                <DAGCanvas
+                  aop={aop}
+                  layout={layout}
+                  posMap={posMap}
+                  selectedNode={selectedNode}
+                  setSelectedNode={setSelectedNode}
+                  dir={dir}
+                  className="w-full h-full"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Fullscreen overlay */}
+      {fullscreen && layout && aop && (
+        <div className="fixed inset-0 z-50 bg-[var(--color-bg)] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)]">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold">
+                {MODULE_CONFIGS[selectedModule]?.label ?? selectedModule}
+              </h2>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {aop.nodes.length} nodes · {aop.edges.length} edges · Drag to pan · Scroll to zoom · Esc to exit
+              </span>
+            </div>
+            {toolbar}
+          </div>
+          <div className="flex-1 relative">
+            <DAGCanvas
+              aop={aop}
+              layout={layout}
+              posMap={posMap}
+              selectedNode={selectedNode}
+              setSelectedNode={setSelectedNode}
+              dir={dir}
+              className="absolute inset-0"
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
