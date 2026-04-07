@@ -71,11 +71,16 @@ class SessionStatus(str, Enum):
 class Session(BaseModel):
     id: str
     module_name: str
+    module_version: str = "1.0"
+    name: str = ""
     status: SessionStatus = SessionStatus.ACTIVE
     context: Dict[str, Any] = Field(default_factory=dict)
     executed_nodes: List[str] = Field(default_factory=list)
     pending_node: Optional[str] = None
     approved_nodes: List[str] = Field(default_factory=list)
+    owner_id: Optional[str] = None
+    project_id: Optional[str] = None
+    version: int = 1
     created_at: str = ""
     updated_at: str = ""
 
@@ -83,11 +88,15 @@ class Session(BaseModel):
 class SessionCreate(BaseModel):
     module_name: str
     context: Dict[str, Any] = Field(default_factory=dict)
+    name: Optional[str] = None
+    project_id: Optional[str] = None
 
 
 class SessionUpdate(BaseModel):
     context: Optional[Dict[str, Any]] = None
     status: Optional[SessionStatus] = None
+    name: Optional[str] = None
+    expected_version: Optional[int] = None
 
 
 class LLMGenerateRequest(BaseModel):

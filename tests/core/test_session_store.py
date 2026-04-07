@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from cen.core.exceptions import SessionVersionConflictError
 from cen.core.models import SessionStatus
 from cen.core.session_store import SessionStore
 
@@ -72,3 +73,80 @@ class TestSessionStore:
 
     async def test_delete_nonexistent(self, store: SessionStore):
         assert await store.delete("nope") is False
+
+    async def test_create_auto_generates_name(self, store: SessionStore):
+        session = await store.create("insurance_appeal_assistant")
+        assert session.name.startswith("insurance_appeal_assistant — ")
+        assert len(session.name) > len("insurance_appeal_assistant — ")
+
+    async def test_create_with_explicit_name(self, store: SessionStore):
+        session = await store.create("mod", name="Mrs. Jones — UHC denial")
+        assert session.name == "Mrs. Jones — UHC denial"
+
+    async def test_create_with_module_version_and_owner_and_project(
+        self, store: SessionStore
+    ):
+        session = await store.create(
+            "mod",
+            module_version="2.1",
+            owner_id="user-abc",
+            project_id="proj-123",
+        )
+        assert session.module_version == "2.1"
+        assert session.owner_id == "user-abc"
+        assert session.project_id == "proj-123"
+        # Round-trip via get to ensure persistence.
+        fetched = await store.get(session.id)
+        assert fetched is not None
+        assert fetched.module_version == "2.1"
+        assert fetched.owner_id == "user-abc"
+        assert fetched.project_id == "proj-123"
+
+    async def test_version_starts_at_one_and_bumps_on_update(
+        self, store: SessionStore
+    ):
+        session = await store.create("mod")
+        assert session.version == 1
+        updated = await store.update(session.id, context={"a": 1})
+        assert updated is not None
+        assert updated.version == 2
+        updated2 = await store.update(updated.id, status=SessionStatus.COMPLETED)
+        assert updated2 is not None
+        assert updated2.version == 3
+
+    async def test_optimistic_concurrency_success(self, store: SessionStore):
+        session = await store.create("mod")
+        updated = await store.update(
+            session.id, expected_version=1, context={"a": 1}
+        )
+        assert updated is not None
+        assert updated.version == 2
+
+    async def test_optimistic_concurrency_conflict(self, store: SessionStore):
+        session = await store.create("mod")
+        # First update bumps version to 2.
+        await store.update(session.id, context={"a": 1})
+        # Second update with stale expected_version should raise.
+        with pytest.raises(SessionVersionConflictError):
+            await store.update(session.id, expected_version=1, context={"a": 2})
+
+    async def test_update_name(self, store: SessionStore):
+        session = await store.create("mod")
+        updated = await store.update(session.id, name="Renamed case")
+        assert updated is not None
+        assert updated.name == "Renamed case"
+
+    async def test_list_filtered_by_owner(self, store: SessionStore):
+        await store.create("mod", owner_id="alice")
+        await store.create("mod", owner_id="bob")
+        await store.create("mod", owner_id="alice")
+        sessions = await store.list_sessions(owner_id="alice")
+        assert len(sessions) == 2
+        assert all(s.owner_id == "alice" for s in sessions)
+
+    async def test_list_filtered_by_project(self, store: SessionStore):
+        await store.create("mod", project_id="proj-1")
+        await store.create("mod", project_id="proj-2")
+        sessions = await store.list_sessions(project_id="proj-1")
+        assert len(sessions) == 1
+        assert sessions[0].project_id == "proj-1"

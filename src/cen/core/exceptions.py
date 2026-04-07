@@ -46,3 +46,16 @@ class ApprovalNotPendingError(CENError):
 
 class LLMUnavailableError(CENError):
     """Raised when the LLM backend is unreachable and no fallback succeeds."""
+
+
+class SessionVersionConflictError(CENError):
+    """Raised when an optimistic concurrency check fails on a session update."""
+
+    def __init__(self, session_id: str, expected: int, actual: int):
+        self.session_id = session_id
+        self.expected = expected
+        self.actual = actual
+        super().__init__(
+            f"Session '{session_id}' version conflict: expected {expected}, found {actual}. "
+            "Refresh and retry."
+        )
