@@ -15,7 +15,29 @@
       "id": "identity_verification",
       "type": "ACTION",
       "metadata": {
-        "label": "Identity Verification"
+        "label": "Identity Verification",
+        "input_schema": [
+          {
+            "key": "patient_name",
+            "label": "Patient name",
+            "type": "text",
+            "required": true,
+            "description": "First and last name as shown on the bill or insurance card."
+          },
+          {
+            "key": "patient_dob",
+            "label": "Patient date of birth",
+            "type": "date",
+            "required": true
+          },
+          {
+            "key": "patient_phone",
+            "label": "Best phone number",
+            "type": "text",
+            "required": false,
+            "description": "Optional - so we can follow up if needed."
+          }
+        ]
       }
     },
     {

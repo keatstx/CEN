@@ -12,7 +12,11 @@ class TestExecuteEndpoint:
             "/execute",
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {
+                    "income_fpl_percent": 150,
+                    "patient_name": "Test Patient",
+                    "patient_dob": "1980-01-01",
+                },
             },
         )
         assert resp.status_code == 200
@@ -45,6 +49,8 @@ class TestExecuteEndpoint:
                     "presumptive_eligible": False,
                     "hospital_full_writeoff_threshold": 200,
                     "hospital_partial_threshold": 400,
+                    "patient_name": "Test Patient",
+                    "patient_dob": "1980-01-01",
                 },
             },
             params={"session_id": (await client.post(

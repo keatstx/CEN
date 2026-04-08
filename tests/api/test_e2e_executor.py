@@ -164,11 +164,16 @@ class TestMasterOrchestratorFlow:
             break
 
         # If we made it to triage_intake, validate its schema.
+        # Note: patient_name may already be in context from the
+        # identity_verification step earlier in the flow (its own
+        # input_schema fills patient_name). The engine only reports
+        # *missing* required fields, so triage_intake's pending list
+        # will only include the fields not yet provided. The
+        # meaningful assertion here is that the select field
+        # (primary_concern) is present and well-formed.
         if result.get("pending_node") == "triage_intake":
             keys = [f["key"] for f in result["pending_input_fields"]]
-            assert "patient_name" in keys
             assert "primary_concern" in keys
-            # primary_concern is a select with options.
             primary_concern_field = next(
                 f for f in result["pending_input_fields"]
                 if f["key"] == "primary_concern"

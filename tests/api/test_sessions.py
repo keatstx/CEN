@@ -89,7 +89,7 @@ class TestExecuteWithSession:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         assert resp.status_code == 200
@@ -107,7 +107,7 @@ class TestExecuteWithSession:
             "/sessions",
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"saved_key": "saved_value", "income_fpl_percent": 999},
+                "context": {"saved_key": "saved_value", "income_fpl_percent": 999, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         sid = create.json()["id"]
@@ -118,7 +118,7 @@ class TestExecuteWithSession:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         assert resp.status_code == 200
@@ -132,7 +132,7 @@ class TestExecuteWithSession:
             params={"session_id": "does_not_exist"},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         assert resp.status_code == 404
@@ -143,7 +143,7 @@ class TestExecuteWithSession:
             "/execute",
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         assert resp.status_code == 200
@@ -166,6 +166,8 @@ class TestApprovalFlow:
                 "module_name": "charity_care_navigator",
                 "context": {
                     "income_fpl_percent": 150,
+                    "patient_name": "Test Patient",
+                    "patient_dob": "1980-01-01",
                     "consent_granted": True,
                     "documents_complete": True,
                     "presumptive_eligible": True,
@@ -226,7 +228,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
 
@@ -257,7 +259,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         executed_nodes = exec_resp.json()["executed_nodes"]
@@ -285,7 +287,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
 
@@ -315,7 +317,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         # Filter to only APPROVAL type
@@ -334,7 +336,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         # Paginate
@@ -358,7 +360,7 @@ class TestAuditTrail:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         resp = await client.get(f"/sessions/{sid}/audit")
@@ -379,7 +381,7 @@ class TestAuditVerify:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         resp = await client.get(f"/sessions/{sid}/audit/verify")
@@ -406,7 +408,7 @@ class TestAuditExport:
             params={"session_id": sid},
             json={
                 "module_name": "charity_care_navigator",
-                "context": {"income_fpl_percent": 150},
+                "context": {"income_fpl_percent": 150, "patient_name": "Test Patient", "patient_dob": "1980-01-01"},
             },
         )
         return sid
