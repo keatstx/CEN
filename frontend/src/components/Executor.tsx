@@ -43,6 +43,19 @@ export default function Executor({ modules }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Returns true if the error looks like a case 404 (stale id). */
+  const isStaleCaseError = (e: unknown): boolean => {
+    const msg = e instanceof Error ? e.message : String(e);
+    return /not found/i.test(msg);
+  };
+
+  /** Clear the stale case from local state and refresh the list. */
+  const clearStaleCase = async () => {
+    setSelectedCaseId(null);
+    setActiveCase(null);
+    await refreshCases();
+  };
+
   // Load projects on mount.
   useEffect(() => {
     listProjects()
@@ -85,9 +98,15 @@ export default function Executor({ modules }: Props) {
     }
     getCase(selectedCaseId)
       .then(setActiveCase)
-      .catch((e) =>
-        setError(e instanceof Error ? e.message : "Failed to load case"),
-      );
+      .catch((e) => {
+        if (isStaleCaseError(e)) {
+          // Stale id from a redeploy or external delete — clear silently.
+          clearStaleCase();
+        } else {
+          setError(e instanceof Error ? e.message : "Failed to load case");
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCaseId]);
 
   const selectedProject = useMemo(
@@ -144,7 +163,11 @@ export default function Executor({ modules }: Props) {
       setActiveCase(updated);
       await refreshCases();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to submit step");
+      if (isStaleCaseError(e)) {
+        await clearStaleCase();
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to submit step");
+      }
     } finally {
       setLoading(false);
     }
@@ -155,15 +178,18 @@ export default function Executor({ modules }: Props) {
     setError(null);
     try {
       await deleteCase(id);
-      // Clear selection if we just deleted the active case.
+    } catch (e) {
+      // 404 on delete is OK — it's already gone.
+      if (!isStaleCaseError(e)) {
+        setError(e instanceof Error ? e.message : "Failed to delete case");
+      }
+    } finally {
+      // Always clear local state for the deleted id and refresh.
       if (selectedCaseId === id) {
         setSelectedCaseId(null);
         setActiveCase(null);
       }
       await refreshCases();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to delete case");
-    } finally {
       setLoading(false);
     }
   };
@@ -178,7 +204,11 @@ export default function Executor({ modules }: Props) {
       setActiveCase(updated);
       await refreshCases();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to approve step");
+      if (isStaleCaseError(e)) {
+        await clearStaleCase();
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to approve step");
+      }
     } finally {
       setLoading(false);
     }
