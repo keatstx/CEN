@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -9,19 +10,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from cen.api.dependencies import (
+    get_artifact_store,
     get_audit_store,
     get_current_user,
     get_engines,
     get_event_bus,
     get_project_store,
     get_session_store,
+    get_storage_backend,
 )
+from cen.core.artifact_store import ArtifactStore
 from cen.core.audit_export import export_csv, export_json
 from cen.core.audit_store import AuditStore
+from cen.core.case_export import (
+    build_case_packet_zip,
+    case_summary_dict,
+    render_case_summary_html,
+)
 from cen.core.exceptions import ApprovalNotPendingError, ModuleNotFoundError, SessionNotFoundError
 from cen.core.models import AuditEntry, AuditVerification, ProvideInputRequest, Session, SessionCreate, SessionStatus, SessionUpdate, User, WorkflowInput, WorkflowResult
 from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
+from cen.storage.base import StorageBackend
 from cen.telemetry.bus import AsyncEventBus
 from cen.telemetry.events import ApprovalEvent
 
@@ -287,6 +297,92 @@ async def approve_session(
 
     await _save_result_back(session_id, session.executed_nodes, result, store)
     return result
+
+
+@router.get("/{session_id}/summary")
+async def case_summary(
+    session_id: str,
+    format: str = Query(default="html", pattern="^(html|json)$"),
+    store: SessionStore = Depends(get_session_store),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Render the case as a printable summary. Format can be html
+    (default — opens in a browser tab, save/print to PDF) or json
+    (machine-readable structured data)."""
+    session = await store.get(session_id)
+    if session is None:
+        raise SessionNotFoundError(session_id)
+    if session.owner_id is not None and session.owner_id != user.id:
+        raise SessionNotFoundError(session_id)
+    artifacts = await artifact_store.list_for_case(session_id, owner_id=user.id)
+
+    if format == "json":
+        payload = case_summary_dict(session, artifacts)
+        return Response(
+            content=json.dumps(payload, indent=2),
+            media_type="application/json",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="case_{session_id}_summary.json"'
+                ),
+            },
+        )
+
+    html_content = render_case_summary_html(session, artifacts)
+    return Response(
+        content=html_content,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+@router.get("/{session_id}/export")
+async def case_export(
+    session_id: str,
+    store: SessionStore = Depends(get_session_store),
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+    storage: StorageBackend = Depends(get_storage_backend),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Bundle the case as a single ZIP packet containing summary.html,
+    summary.json, and a documents/ folder with every uploaded file.
+    One-click hand-off for the navigator to email, archive, or share.
+    """
+    session = await store.get(session_id)
+    if session is None:
+        raise SessionNotFoundError(session_id)
+    if session.owner_id is not None and session.owner_id != user.id:
+        raise SessionNotFoundError(session_id)
+
+    artifacts = await artifact_store.list_for_case(session_id, owner_id=user.id)
+    blobs: dict[str, bytes] = {}
+    for a in artifacts:
+        try:
+            blobs[a.id] = await storage.read(a.storage_key)
+        except FileNotFoundError:
+            # Skip blobs that disappeared on disk; the summary will
+            # still list them.
+            continue
+
+    zip_bytes = build_case_packet_zip(session, artifacts, blobs)
+    # Content-Disposition headers must be ASCII (latin-1). Strip
+    # non-ASCII characters from the auto-generated case name (which
+    # may contain em dashes, accented chars, etc.) and fall back to
+    # the case id if nothing usable remains.
+    raw_name = session.name or session_id
+    safe_name = "".join(
+        c if (c.isascii() and c not in '/\\:*?"<>|') else "_"
+        for c in raw_name
+    ).strip("_ ") or session_id
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="case_{safe_name}.zip"',
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.post("/{session_id}/rewind/{node_id}", response_model=WorkflowResult)

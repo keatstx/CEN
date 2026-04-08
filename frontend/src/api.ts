@@ -103,6 +103,18 @@ export function rewindCase(
   });
 }
 
+// Direct URLs for the navigator's "view summary" / "download packet"
+// buttons. Bypasses the JSON request wrapper because the browser
+// handles the response directly (open in new tab / trigger download).
+
+export function caseSummaryUrl(id: string): string {
+  return `/cases/${id}/summary`;
+}
+
+export function caseExportUrl(id: string): string {
+  return `/cases/${id}/export`;
+}
+
 export async function deleteCase(id: string): Promise<void> {
   const res = await fetch(`/cases/${id}`, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {

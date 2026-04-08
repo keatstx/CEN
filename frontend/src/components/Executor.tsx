@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   approveSession,
+  caseExportUrl,
+  caseSummaryUrl,
   createCase,
   createProject,
   deleteCase,
@@ -333,17 +335,38 @@ export default function Executor({ modules }: Props) {
         {activeCase && (
           <>
             <div className="card">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-semibold">{activeCase.name}</h2>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-semibold truncate">
+                    {activeCase.name}
+                  </h2>
                   <p className="text-xs text-[var(--color-text-muted)] mt-0.5 font-mono">
                     {activeCase.module_name} · v{activeCase.module_version}
                   </p>
                 </div>
-                <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
-                  {activeCase.id.slice(0, 8)}
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <a
+                    href={caseSummaryUrl(activeCase.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs px-2.5 py-1.5 rounded border border-[var(--color-border)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+                    title="Open a printable summary of this case in a new tab"
+                  >
+                    📄 View summary
+                  </a>
+                  <a
+                    href={caseExportUrl(activeCase.id)}
+                    download
+                    className="text-xs px-2.5 py-1.5 rounded bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+                    title="Download a ZIP packet with the summary and all uploaded documents"
+                  >
+                    ⬇ Download packet
+                  </a>
+                </div>
               </div>
+              <p className="text-[10px] font-mono text-[var(--color-text-muted)] mt-2 opacity-60">
+                {activeCase.id}
+              </p>
             </div>
 
             <Stepper caseRecord={activeCase} onRewind={handleRewind} />
