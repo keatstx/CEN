@@ -15,6 +15,7 @@ import type { Project, Session } from "../types";
 import CaseSidebar from "./CaseSidebar";
 import Concierge from "./Concierge";
 import Documents from "./Documents";
+import InformationSoFar from "./InformationSoFar";
 import StepCard from "./StepCard";
 import Stepper from "./Stepper";
 
@@ -346,6 +347,8 @@ export default function Executor({ modules }: Props) {
             </div>
 
             <Stepper caseRecord={activeCase} onRewind={handleRewind} />
+
+            <InformationSoFar caseRecord={activeCase} />
 
             <StepCard
               caseRecord={activeCase}

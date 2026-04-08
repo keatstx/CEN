@@ -108,11 +108,9 @@ export default function StepCard({
           stepNumber={stepNumber}
           eyebrow="Your turn"
           title="Review and approve"
-          subtitle="The workflow needs your sign-off before it can continue. Take a quick look at what's been collected so far, then approve to move on."
+          subtitle="The workflow needs your sign-off before it can continue. Review the Information so far panel above to confirm what was captured, then approve to move on."
           nodeId={caseRecord.pending_node}
         />
-
-        <CollectedSummary context={caseRecord.context} />
 
         <button
           className="btn btn-primary w-full text-sm py-3"
@@ -239,72 +237,6 @@ function StepHeader({
       </div>
     </div>
   );
-}
-
-/**
- * Renders the case context as a friendly key/value summary panel.
- * Filters out internal engine state (anything starting with __ or
- * ending in _status / _result / _llm_response) so the navigator only
- * sees what they actually entered.
- */
-function CollectedSummary({ context }: { context: Record<string, unknown> }) {
-  const visible = Object.entries(context).filter(([k, v]) => {
-    if (k.startsWith("__")) return false;
-    if (k.endsWith("_status")) return false;
-    if (k.endsWith("_result")) return false;
-    if (k.endsWith("_llm_response")) return false;
-    if (v === null || v === undefined || v === "") return false;
-    return true;
-  });
-
-  if (visible.length === 0) {
-    return (
-      <div className="bg-[var(--color-bg)] rounded-lg px-4 py-3 text-xs text-[var(--color-text-muted)] italic">
-        No information collected yet for this case.
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-[var(--color-bg)] rounded-lg px-4 py-3 space-y-2">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-        Information collected so far
-      </p>
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
-        {visible.map(([k, v]) => (
-          <div key={k} className="flex flex-col">
-            <dt className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wide">
-              {humanizeKey(k)}
-            </dt>
-            <dd className="text-xs text-[var(--color-text-primary)] font-medium">
-              {formatValue(v)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function humanizeKey(key: string): string {
-  return key
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .replace(/\bDob\b/, "DOB")
-    .replace(/\bSsn\b/, "SSN")
-    .replace(/\bId\b/, "ID");
-}
-
-function formatValue(v: unknown): string {
-  if (v === true) return "Yes";
-  if (v === false) return "No";
-  if (typeof v === "number") return v.toLocaleString();
-  if (typeof v === "string") {
-    // Truncate long strings
-    if (v.length > 80) return v.slice(0, 77) + "…";
-    return v;
-  }
-  return JSON.stringify(v);
 }
 
 function FieldInput({
