@@ -45,8 +45,21 @@ export default function Executor({ modules }: Props) {
 
   /** Returns true if the error looks like a case 404 (stale id). */
   const isStaleCaseError = (e: unknown): boolean => {
+    if (e instanceof Error) {
+      const status = (e as Error & { status?: number }).status;
+      if (status === 404) return true;
+    }
     const msg = e instanceof Error ? e.message : String(e);
     return /not found/i.test(msg);
+  };
+
+  /** Returns true if the error is a 409 (wrong state — case advanced). */
+  const isWrongStateError = (e: unknown): boolean => {
+    if (e instanceof Error) {
+      const status = (e as Error & { status?: number }).status;
+      if (status === 409) return true;
+    }
+    return false;
   };
 
   /** Clear the stale case from local state and refresh the list. */
@@ -54,6 +67,18 @@ export default function Executor({ modules }: Props) {
     setSelectedCaseId(null);
     setActiveCase(null);
     await refreshCases();
+  };
+
+  /** Re-fetch the active case so the UI catches up to the backend's state. */
+  const resyncCase = async (id: string) => {
+    try {
+      const fresh = await getCase(id);
+      setActiveCase(fresh);
+      await refreshCases();
+    } catch {
+      // If the resync itself 404s, clear instead.
+      await clearStaleCase();
+    }
   };
 
   // Load projects on mount.
@@ -165,6 +190,11 @@ export default function Executor({ modules }: Props) {
     } catch (e) {
       if (isStaleCaseError(e)) {
         await clearStaleCase();
+      } else if (isWrongStateError(e)) {
+        // The case advanced past AWAITING_INPUT (double-submit, or
+        // another tab moved it forward). Re-sync silently and let the
+        // user see whichever step we're really on now.
+        await resyncCase(activeCase.id);
       } else {
         setError(e instanceof Error ? e.message : "Failed to submit step");
       }
@@ -206,6 +236,8 @@ export default function Executor({ modules }: Props) {
     } catch (e) {
       if (isStaleCaseError(e)) {
         await clearStaleCase();
+      } else if (isWrongStateError(e)) {
+        await resyncCase(activeCase.id);
       } else {
         setError(e instanceof Error ? e.message : "Failed to approve step");
       }

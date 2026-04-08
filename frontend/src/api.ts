@@ -16,7 +16,18 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? `Request failed: ${res.status}`);
+    // FastAPI default error key is `detail`; our custom error handlers
+    // sometimes use `error`. Try both before falling back to a generic.
+    const message =
+      body.detail ??
+      body.error ??
+      body.message ??
+      `Request failed: ${res.status}`;
+    const err = new Error(typeof message === "string" ? message : JSON.stringify(message));
+    // Tag the error with the HTTP status so callers can distinguish
+    // 404 (stale id) from 409 (wrong state) etc.
+    (err as Error & { status?: number }).status = res.status;
+    throw err;
   }
   return res.json();
 }
