@@ -183,6 +183,61 @@ class TestProvideInputFlow:
         assert resp.status_code == 422
         assert "goal" in resp.text
 
+    async def test_rewind_to_prior_step_clears_answer_and_re_pauses(
+        self, pause_client: AsyncClient
+    ):
+        # Walk forward: create case, fill in goal, run to completion.
+        cr = await pause_client.post(
+            "/cases", json={"module_name": "pause_test"}
+        )
+        cid = cr.json()["id"]
+        await pause_client.post(
+            f"/execute?session_id={cid}",
+            json={"module_name": "pause_test", "context": {}},
+        )
+        await pause_client.post(
+            f"/cases/{cid}/provide_input",
+            json={"inputs": {"goal": "first answer"}},
+        )
+
+        # Confirm the case completed and the answer is in context.
+        get1 = await pause_client.get(f"/cases/{cid}")
+        assert get1.json()["status"] == "COMPLETED"
+        assert get1.json()["context"]["goal"] == "first answer"
+
+        # Rewind to collect_goal — clears its outputs and the goal
+        # field from context, re-executes, and should pause again
+        # at collect_goal asking for input.
+        rw = await pause_client.post(f"/cases/{cid}/rewind/collect_goal")
+        assert rw.status_code == 200
+        rw_data = rw.json()
+        assert rw_data["final_outcome"].startswith("pending_input:")
+        assert rw_data["pending_node"] == "collect_goal"
+        # The answer was cleared from context.
+        assert "goal" not in rw_data["context"]
+
+        # Provide a new answer.
+        await pause_client.post(
+            f"/cases/{cid}/provide_input",
+            json={"inputs": {"goal": "corrected answer"}},
+        )
+        get2 = await pause_client.get(f"/cases/{cid}")
+        assert get2.json()["status"] == "COMPLETED"
+        assert get2.json()["context"]["goal"] == "corrected answer"
+
+    async def test_rewind_to_unreached_node_400(
+        self, pause_client: AsyncClient
+    ):
+        cr = await pause_client.post(
+            "/cases", json={"module_name": "pause_test"}
+        )
+        cid = cr.json()["id"]
+        # Trying to rewind to a node we never reached should 400.
+        resp = await pause_client.post(
+            f"/cases/{cid}/rewind/done"
+        )
+        assert resp.status_code == 400
+
     async def test_provide_input_via_sessions_alias(
         self, pause_client: AsyncClient
     ):

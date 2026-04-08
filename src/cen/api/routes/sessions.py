@@ -289,6 +289,95 @@ async def approve_session(
     return result
 
 
+@router.post("/{session_id}/rewind/{node_id}", response_model=WorkflowResult)
+async def rewind_session(
+    session_id: str,
+    node_id: str,
+    engines: dict = Depends(get_engines),
+    store: SessionStore = Depends(get_session_store),
+):
+    """Rewind a case to a previously-executed step so the navigator
+    can edit the answer they provided. Clears the target node and
+    every node after it from the executed list, drops their entries
+    from the idempotency cache, and clears any input fields the
+    target node owns. Re-executes — engine walks the DAG again,
+    replays cached entries that still exist, and pauses at the
+    target node with the original prompt.
+
+    No-op if the target node is not in the case's executed_nodes.
+    """
+    session = await store.get(session_id)
+    if session is None:
+        raise SessionNotFoundError(session_id)
+    if node_id not in session.executed_nodes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Step '{node_id}' has not been reached yet — nothing to rewind to.",
+        )
+
+    engine = engines.get(session.module_name)
+    if engine is None:
+        raise ModuleNotFoundError(session.module_name, list(engines.keys()))
+    target_node = engine.nodes.get(node_id)
+    if target_node is None:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown node '{node_id}' in module."
+        )
+
+    idx = session.executed_nodes.index(node_id)
+    new_executed = session.executed_nodes[:idx]
+    nodes_to_purge = session.executed_nodes[idx:]
+
+    # Drop the cached node outputs for the target and everything
+    # downstream so they re-execute fresh.
+    new_context = dict(session.context)
+    cache = dict(new_context.get("__node_outputs", {}))
+    for nid in nodes_to_purge:
+        cache.pop(nid, None)
+    new_context["__node_outputs"] = cache
+
+    # Clear the input keys the target node owns so the engine pauses
+    # again when it hits the target. Without this, the engine sees
+    # the existing values in context and runs straight through.
+    keys_to_clear: list[str] = []
+    if target_node.metadata.input_schema:
+        keys_to_clear.extend(f.key for f in target_node.metadata.input_schema)
+    if target_node.condition_field:
+        keys_to_clear.append(target_node.condition_field)
+    # CONDITION result fields cached by the engine
+    keys_to_clear.append(f"{node_id}_result")
+    keys_to_clear.append(f"{node_id}_status")
+    for k in keys_to_clear:
+        new_context.pop(k, None)
+
+    # Drop the target from approved_nodes if it was an APPROVAL.
+    new_approved = [n for n in session.approved_nodes if n != node_id]
+
+    await store.update(
+        session_id,
+        context=new_context,
+        executed_nodes=new_executed,
+        approved_nodes=new_approved,
+        status=SessionStatus.ACTIVE,
+        pending_node=None,
+        pending_input_fields=None,
+    )
+
+    # Re-run the workflow. The engine walks topologically, replays
+    # any cached entries that survived the purge, and pauses again
+    # at the target node (or earlier if other inputs are missing).
+    workflow_input = WorkflowInput(
+        module_name=session.module_name, context=new_context
+    )
+    result = await engine.execute(
+        workflow_input,
+        approved_nodes=set(new_approved),
+        session_id=session_id,
+    )
+    await _save_result_back(session_id, new_executed, result, store)
+    return result
+
+
 @router.post("/{session_id}/provide_input", response_model=WorkflowResult)
 async def provide_input(
     session_id: str,

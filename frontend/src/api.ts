@@ -94,6 +94,15 @@ export function provideInput(
   });
 }
 
+export function rewindCase(
+  id: string,
+  nodeId: string,
+): Promise<WorkflowResult> {
+  return request<WorkflowResult>(`/cases/${id}/rewind/${nodeId}`, {
+    method: "POST",
+  });
+}
+
 export async function deleteCase(id: string): Promise<void> {
   const res = await fetch(`/cases/${id}`, { method: "DELETE" });
   if (!res.ok && res.status !== 204) {

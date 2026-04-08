@@ -828,6 +828,111 @@ class TestConditionAutoPause:
         assert "f" in result.executed_nodes
         assert "t" not in result.executed_nodes
 
+    async def test_in_operator_renders_as_select_with_list_options(self):
+        # CONDITIONs using the "in" operator should auto-derive a
+        # select with the list values as options, not a text input.
+        aop = AOPDefinition(
+            module_name="in_op_test",
+            nodes=[
+                AOPNode(
+                    id="check",
+                    type=NodeType.CONDITION,
+                    metadata=NodeMetadata(label="Determination?"),
+                    condition_field="determination_status",
+                    condition_operator="in",
+                    condition_value=["approved_full", "approved_partial", "denied", "pending"],
+                    true_next="any",
+                    false_next="other",
+                ),
+                AOPNode(id="any", type=NodeType.HANDOFF),
+                AOPNode(id="other", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="check", target="any"),
+                AOPEdge(source="check", target="other"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+        result = await engine.execute(
+            WorkflowInput(module_name="in_op_test", context={})
+        )
+        assert result.final_outcome.startswith("pending_input:")
+        field = result.pending_input_fields[0]
+        assert field.type == "select"
+        assert field.options is not None
+        keys = [o["value"] for o in field.options]
+        assert keys == ["approved_full", "approved_partial", "denied", "pending"]
+        # Labels should be humanized
+        labels = [o["label"] for o in field.options]
+        assert "Approved Full" in labels
+
+    async def test_eq_with_sibling_conditions_aggregates_options(self):
+        # When multiple sibling CONDITIONs read the same field with
+        # == against different values, the auto-derived input should
+        # aggregate them all into a single select. So if the DAG has
+        # 4 conditions each checking appeal_response == "...", the
+        # user gets a 4-option dropdown.
+        aop = AOPDefinition(
+            module_name="agg_test",
+            nodes=[
+                AOPNode(
+                    id="overturned_check",
+                    type=NodeType.CONDITION,
+                    condition_field="appeal_response",
+                    condition_operator="==",
+                    condition_value="overturned",
+                    true_next="t1",
+                    false_next="t2",
+                ),
+                AOPNode(
+                    id="partial_check",
+                    type=NodeType.CONDITION,
+                    condition_field="appeal_response",
+                    condition_operator="==",
+                    condition_value="partial",
+                    true_next="t1",
+                    false_next="t2",
+                ),
+                AOPNode(
+                    id="upheld_check",
+                    type=NodeType.CONDITION,
+                    condition_field="appeal_response",
+                    condition_operator="==",
+                    condition_value="upheld",
+                    true_next="t1",
+                    false_next="t2",
+                ),
+                AOPNode(id="t1", type=NodeType.HANDOFF),
+                AOPNode(id="t2", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="overturned_check", target="partial_check"),
+                AOPEdge(source="partial_check", target="upheld_check"),
+                AOPEdge(source="overturned_check", target="t1"),
+                AOPEdge(source="overturned_check", target="t2"),
+                AOPEdge(source="partial_check", target="t1"),
+                AOPEdge(source="partial_check", target="t2"),
+                AOPEdge(source="upheld_check", target="t1"),
+                AOPEdge(source="upheld_check", target="t2"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+        result = await engine.execute(
+            WorkflowInput(module_name="agg_test", context={})
+        )
+        assert result.final_outcome.startswith("pending_input:")
+        field = result.pending_input_fields[0]
+        assert field.type == "select"
+        assert field.options is not None
+        keys = [o["value"] for o in field.options]
+        # All three sibling values aggregated into the dropdown.
+        assert "overturned" in keys
+        assert "partial" in keys
+        assert "upheld" in keys
+        assert len(keys) == 3
+
     async def test_resume_after_condition_input_takes_correct_branch(self):
         engine = AsyncWorkflowEngine()
         engine.load_aop(_condition_only_aop())

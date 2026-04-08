@@ -38,6 +38,11 @@ OPERATORS = {
 NUMERIC_OPS = {"<", "<=", ">", ">="}
 
 
+def _humanize(s: str) -> str:
+    """Turn 'approved_full' into 'Approved Full' for select labels."""
+    return s.replace("_", " ").strip().title() if s else s
+
+
 class AsyncWorkflowEngine:
     def __init__(
         self,
@@ -368,9 +373,8 @@ class AsyncWorkflowEngine:
         missing = [f for f in schema if f.required and context.get(f.key) is None]
         return missing or None
 
-    @staticmethod
     def _auto_derive_condition_input(
-        node: AOPNode, context: dict[str, Any]
+        self, node: AOPNode, context: dict[str, Any]
     ) -> InputField | None:
         """Auto-derive an input prompt for a CONDITION node when its
         condition_field is missing from context. Returns None when the
@@ -379,11 +383,19 @@ class AsyncWorkflowEngine:
         existing evaluation path handle it).
 
         The field type is inferred from the condition_operator and
-        condition_value so the frontend renders the right control:
-        - Numeric operators (<, <=, >, >=) → number input
-        - Bool condition_value → checkbox
+        condition_value, with multi-choice CONDITIONs aggregating
+        sibling tested values across the DAG so the user gets a real
+        dropdown of every legitimate value:
+
         - Switch with branches dict → select with branch keys as options
-        - Equality op with non-bool value → text input
+        - Numeric operators (<, <=, >, >=) → number input
+        - "in [list]" operator → select with the list as options
+        - Equality (==) against a non-bool value → select with the
+          aggregated values across every other CONDITION in the DAG
+          that reads the same field. If only one value exists, falls
+          back to a 2-option select ("yes that value" / "no, other").
+        - Bool condition_value → checkbox
+        - Otherwise → text input
         """
         field = node.condition_field
         if not field:
@@ -398,16 +410,41 @@ class AsyncWorkflowEngine:
         options: list[dict[str, str]] | None = None
 
         if op == "switch" and node.branches:
-            # Switch node — present the branch keys as a dropdown.
             field_type = "select"
             options = [
-                {"value": str(k), "label": str(k).replace("_", " ").title()}
+                {"value": str(k), "label": _humanize(str(k))}
                 for k in node.branches.keys()
             ]
         elif op in NUMERIC_OPS:
             field_type = "number"
+        elif op in ("in", "not in") and isinstance(value, (list, tuple)):
+            field_type = "select"
+            options = [
+                {"value": str(v), "label": _humanize(str(v))} for v in value
+            ]
         elif isinstance(value, bool):
             field_type = "boolean"
+        elif op in ("==", "!="):
+            # Aggregate every value tested for this field across the
+            # DAG so the user sees a real choice list. This catches
+            # the common pattern of multiple sibling CONDITIONs each
+            # checking one possible value of the same field.
+            aggregated = self._collect_field_values(field)
+            if len(aggregated) >= 2:
+                field_type = "select"
+                options = [
+                    {"value": str(v), "label": _humanize(str(v))} for v in aggregated
+                ]
+            elif len(aggregated) == 1:
+                # Only one comparison value — make it a binary select
+                # so the navigator can pick "this value" vs "anything
+                # else", which still produces a meaningful boolean.
+                only = next(iter(aggregated))
+                field_type = "select"
+                options = [
+                    {"value": str(only), "label": _humanize(str(only))},
+                    {"value": "__other__", "label": "Something else"},
+                ]
 
         label = node.metadata.label or f"Please provide {field.replace('_', ' ')}"
         description = node.metadata.description or ""
@@ -419,6 +456,37 @@ class AsyncWorkflowEngine:
             options=options,
             description=description,
         )
+
+    def _collect_field_values(self, field: str) -> list[str]:
+        """Walk the loaded DAG and return every distinct value tested
+        against the given context field across all CONDITION nodes,
+        in document order. Used to aggregate option lists for
+        auto-derived multi-choice inputs."""
+        seen: list[str] = []
+        for n in self.nodes.values():
+            if n.type != NodeType.CONDITION:
+                continue
+            if n.condition_field != field:
+                continue
+            if n.condition_operator in ("in", "not in") and isinstance(
+                n.condition_value, (list, tuple)
+            ):
+                for v in n.condition_value:
+                    s = str(v)
+                    if s not in seen:
+                        seen.append(s)
+            elif n.condition_operator == "switch" and n.branches:
+                for k in n.branches.keys():
+                    s = str(k)
+                    if s not in seen:
+                        seen.append(s)
+            elif n.condition_value is not None and not isinstance(
+                n.condition_value, bool
+            ):
+                s = str(n.condition_value)
+                if s not in seen:
+                    seen.append(s)
+        return seen
 
     async def _emit_node_event(
         self,

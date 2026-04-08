@@ -9,6 +9,7 @@ import {
   listCases,
   listProjects,
   provideInput,
+  rewindCase,
 } from "../api";
 import type { Project, Session } from "../types";
 import CaseSidebar from "./CaseSidebar";
@@ -225,6 +226,26 @@ export default function Executor({ modules }: Props) {
     }
   };
 
+  const handleRewind = async (nodeId: string) => {
+    if (!activeCase) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await rewindCase(activeCase.id, nodeId);
+      const updated = await getCase(activeCase.id);
+      setActiveCase(updated);
+      await refreshCases();
+    } catch (e) {
+      if (isStaleCaseError(e)) {
+        await clearStaleCase();
+      } else {
+        setError(e instanceof Error ? e.message : "Failed to go back");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApprove = async () => {
     if (!activeCase) return;
     setLoading(true);
@@ -324,7 +345,7 @@ export default function Executor({ modules }: Props) {
               </div>
             </div>
 
-            <Stepper caseRecord={activeCase} />
+            <Stepper caseRecord={activeCase} onRewind={handleRewind} />
 
             <StepCard
               caseRecord={activeCase}
