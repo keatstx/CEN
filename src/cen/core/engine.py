@@ -195,6 +195,14 @@ class AsyncWorkflowEngine:
                     output[f"{node_id}_llm_response"] = llm_response
                 context[f"{node_id}_status"] = "done"
                 output[f"{node_id}_status"] = "done"
+                # Apply auto_set: any context fields the node author
+                # declared as "set this after I finish". Used to bridge
+                # ACTION → downstream CONDITION gaps so the navigator
+                # isn't asked redundant boolean questions.
+                if node.metadata.auto_set:
+                    for k, v in node.metadata.auto_set.items():
+                        context[k] = v
+                        output[k] = v
                 node_outputs[node_id] = output
                 await self._emit_node_event(session_id, node_id, "ACTION", "done", context)
 
@@ -306,6 +314,12 @@ class AsyncWorkflowEngine:
                 executed.append(node_id)
                 if node_id in _approved:
                     context[f"{node_id}_status"] = "approved"
+                    # Apply auto_set on approval too — e.g. hipaa_consent
+                    # auto-sets consent_granted=true so the downstream
+                    # consent_check CONDITION advances cleanly.
+                    if node.metadata.auto_set:
+                        for k, v in node.metadata.auto_set.items():
+                            context[k] = v
                     await self._emit_node_event(session_id, node_id, "APPROVAL", "approved", context)
                 else:
                     outcome = f"pending_approval:{node.metadata.label or node_id}"

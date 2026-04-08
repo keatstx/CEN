@@ -42,6 +42,14 @@ class NodeMetadata(BaseModel):
     description: str = ""
     params: Dict[str, Any] = Field(default_factory=dict)
     input_schema: Optional[List[InputField]] = None
+    # auto_set: declarative "after this node finishes, write these
+    # values into context". Used to bridge ACTION → CONDITION gaps:
+    # e.g. document_intake's auto_set sets documents_complete=true so
+    # the downstream documents_complete CONDITION reads true and
+    # advances without auto-pausing for a redundant boolean question.
+    # Applies after first execution of an ACTION and after a successful
+    # APPROVAL. Cached on resume so the values persist across re-runs.
+    auto_set: Optional[Dict[str, Any]] = None
 
 
 class AOPNode(BaseModel):

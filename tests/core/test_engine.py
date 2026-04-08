@@ -687,6 +687,108 @@ class TestConditionAutoPause:
             f"expected numeric input type for numeric condition, got {field.type}"
         )
 
+    async def test_action_auto_set_writes_into_context_and_propagates(self):
+        # Regression: ACTION nodes can declare auto_set in metadata to
+        # write context fields after they finish. This bridges the
+        # gap to a downstream CONDITION that reads "did the prior
+        # step happen?" booleans, so the navigator isn't asked
+        # redundant boolean questions.
+        aop = AOPDefinition(
+            module_name="auto_set_test",
+            nodes=[
+                AOPNode(
+                    id="upload_step",
+                    type=NodeType.ACTION,
+                    metadata=NodeMetadata(
+                        label="Upload docs",
+                        auto_set={"documents_complete": True},
+                    ),
+                ),
+                AOPNode(
+                    id="docs_check",
+                    type=NodeType.CONDITION,
+                    condition_field="documents_complete",
+                    condition_operator="==",
+                    condition_value=True,
+                    true_next="done",
+                    false_next="followup",
+                ),
+                AOPNode(id="done", type=NodeType.HANDOFF),
+                AOPNode(id="followup", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="upload_step", target="docs_check"),
+                AOPEdge(source="docs_check", target="done"),
+                AOPEdge(source="docs_check", target="followup"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+
+        result = await engine.execute(
+            WorkflowInput(module_name="auto_set_test", context={})
+        )
+
+        # ACTION ran, set documents_complete=true via auto_set,
+        # CONDITION saw True and took the true branch.
+        assert result.context["documents_complete"] is True
+        assert "done" in result.executed_nodes
+        assert "followup" not in result.executed_nodes
+        assert result.final_outcome.startswith("handoff:")
+
+    async def test_approval_auto_set_writes_after_approval(self):
+        # APPROVAL nodes also support auto_set — applied after the
+        # approval is granted, so downstream CONDITIONs can rely on
+        # consent_granted etc. without the navigator answering twice.
+        aop = AOPDefinition(
+            module_name="approval_auto_set_test",
+            nodes=[
+                AOPNode(
+                    id="hipaa",
+                    type=NodeType.APPROVAL,
+                    metadata=NodeMetadata(
+                        label="HIPAA Consent",
+                        auto_set={"consent_granted": True},
+                    ),
+                ),
+                AOPNode(
+                    id="consent_check",
+                    type=NodeType.CONDITION,
+                    condition_field="consent_granted",
+                    condition_operator="==",
+                    condition_value=True,
+                    true_next="proceed",
+                    false_next="bail",
+                ),
+                AOPNode(id="proceed", type=NodeType.HANDOFF),
+                AOPNode(id="bail", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="hipaa", target="consent_check"),
+                AOPEdge(source="consent_check", target="proceed"),
+                AOPEdge(source="consent_check", target="bail"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+
+        # First run: pauses at hipaa awaiting approval.
+        first = await engine.execute(
+            WorkflowInput(module_name="approval_auto_set_test", context={})
+        )
+        assert first.final_outcome.startswith("pending_approval:")
+
+        # Approve and resume: auto_set fires, consent_check sees true,
+        # workflow takes the true branch.
+        second = await engine.execute(
+            WorkflowInput(module_name="approval_auto_set_test", context=first.context),
+            approved_nodes={"hipaa"},
+        )
+        assert second.context["consent_granted"] is True
+        assert "proceed" in second.executed_nodes
+        assert "bail" not in second.executed_nodes
+        assert second.final_outcome.startswith("handoff:")
+
     async def test_evaluate_condition_returns_false_on_type_mismatch(self):
         # Regression: previously a string-vs-int comparison via a
         # numeric operator (e.g. user typed "test" into a deadline

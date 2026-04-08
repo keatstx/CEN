@@ -67,7 +67,10 @@
       "type": "APPROVAL",
       "metadata": {
         "label": "Master HIPAA, AOR, & Advocacy Consent",
-        "description": "Single signed consent covering all downstream modules."
+        "description": "Single signed consent covering all downstream modules.",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {

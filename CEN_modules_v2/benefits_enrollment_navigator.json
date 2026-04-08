@@ -36,7 +36,10 @@
       "id": "consent",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Consent & ROI"
+        "label": "Consent & ROI",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {

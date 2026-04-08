@@ -36,7 +36,10 @@
       "id": "hipaa_consent",
       "type": "APPROVAL",
       "metadata": {
-        "label": "HIPAA & Advocacy Consent"
+        "label": "HIPAA & Advocacy Consent",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {

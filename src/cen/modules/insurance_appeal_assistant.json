@@ -37,7 +37,10 @@
       "type": "APPROVAL",
       "metadata": {
         "label": "HIPAA & AOR Consent",
-        "description": "Authorization of Representative form for payer."
+        "description": "Authorization of Representative form for payer.",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {

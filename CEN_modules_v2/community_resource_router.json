@@ -36,7 +36,10 @@
       "id": "consent",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Consent & Data Sharing"
+        "label": "Consent & Data Sharing",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {

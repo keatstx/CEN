@@ -68,7 +68,10 @@
       "type": "APPROVAL",
       "metadata": {
         "label": "HIPAA & Advocacy Consent",
-        "description": "Obtain signed HIPAA authorization and advocacy consent."
+        "description": "Obtain signed HIPAA authorization and advocacy consent.",
+        "auto_set": {
+          "consent_granted": true
+        }
       }
     },
     {
@@ -104,7 +107,10 @@
             "required": false,
             "description": "If the patient doesn't have documents yet, note what's missing."
           }
-        ]
+        ],
+        "auto_set": {
+          "documents_complete": true
+        }
       }
     },
     {
