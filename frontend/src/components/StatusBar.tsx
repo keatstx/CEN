@@ -30,8 +30,6 @@ export default function StatusBar({ ready, error }: Props) {
       <span className="text-[var(--color-text-muted)]">·</span>
       <span>LLM: <span className="text-[var(--color-blue)]">{ready.llm_backend}</span></span>
       <span className="text-[var(--color-text-muted)]">·</span>
-      <span>Mode: <span className="font-mono">{ready.deployment_mode}</span></span>
-      <span className="text-[var(--color-text-muted)]">·</span>
       <span>Status: <span className="text-[var(--color-success)]">{ready.status}</span></span>
     </div>
   );
