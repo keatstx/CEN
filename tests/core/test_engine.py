@@ -641,6 +641,91 @@ class TestConditionAutoPause:
         assert "low_path" in result.executed_nodes
         assert "other_path" not in result.executed_nodes
 
+    async def test_auto_derived_input_type_for_numeric_condition_is_number(self):
+        # Regression: previously the auto-derived InputField for any
+        # CONDITION node was always type=text. When the condition
+        # operator was numeric (<, >, etc.), the user would type a
+        # string into the text field and the engine would crash with
+        # `TypeError: '>' not supported between instances of 'str'
+        # and 'int'`. The fix is to infer the field type from the
+        # condition operator.
+        aop = AOPDefinition(
+            module_name="numeric_cond_test",
+            nodes=[
+                AOPNode(id="start", type=NodeType.ACTION),
+                AOPNode(
+                    id="check",
+                    type=NodeType.CONDITION,
+                    metadata=NodeMetadata(label="How many days remain?"),
+                    condition_field="days_remaining",
+                    condition_operator=">",
+                    condition_value=0,
+                    true_next="ok_path",
+                    false_next="late_path",
+                ),
+                AOPNode(id="ok_path", type=NodeType.HANDOFF),
+                AOPNode(id="late_path", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="start", target="check"),
+                AOPEdge(source="check", target="ok_path"),
+                AOPEdge(source="check", target="late_path"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+
+        result = await engine.execute(
+            WorkflowInput(module_name="numeric_cond_test", context={})
+        )
+
+        assert result.final_outcome.startswith("pending_input:")
+        assert result.pending_input_fields is not None
+        field = result.pending_input_fields[0]
+        assert field.key == "days_remaining"
+        assert field.type == "number", (
+            f"expected numeric input type for numeric condition, got {field.type}"
+        )
+
+    async def test_evaluate_condition_returns_false_on_type_mismatch(self):
+        # Regression: previously a string-vs-int comparison via a
+        # numeric operator (e.g. user typed "test" into a deadline
+        # check) would raise TypeError and crash the request with a
+        # 500. The engine now returns False on un-coercible numeric
+        # operands instead of crashing.
+        aop = AOPDefinition(
+            module_name="bad_types_test",
+            nodes=[
+                AOPNode(
+                    id="check",
+                    type=NodeType.CONDITION,
+                    condition_field="x",
+                    condition_operator=">",
+                    condition_value=10,
+                    true_next="t",
+                    false_next="f",
+                ),
+                AOPNode(id="t", type=NodeType.HANDOFF),
+                AOPNode(id="f", type=NodeType.HANDOFF),
+            ],
+            edges=[
+                AOPEdge(source="check", target="t"),
+                AOPEdge(source="check", target="f"),
+            ],
+        )
+        engine = AsyncWorkflowEngine()
+        engine.load_aop(aop)
+
+        # Pass a string value where a number is expected — should
+        # return False and continue, not crash.
+        result = await engine.execute(
+            WorkflowInput(module_name="bad_types_test", context={"x": "not a number"})
+        )
+        assert result.final_outcome.startswith("handoff:")
+        # False branch was taken (since the comparison is False).
+        assert "f" in result.executed_nodes
+        assert "t" not in result.executed_nodes
+
     async def test_resume_after_condition_input_takes_correct_branch(self):
         engine = AsyncWorkflowEngine()
         engine.load_aop(_condition_only_aop())

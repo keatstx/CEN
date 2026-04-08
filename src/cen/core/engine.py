@@ -92,11 +92,21 @@ class AsyncWorkflowEngine:
             raise ValueError(f"Unknown operator: {op_str}")
 
         if op_str in NUMERIC_OPS:
+            # Numeric ops require coercible values on both sides. If
+            # coercion fails (e.g. user typed "test" into an auto-
+            # derived text input for a numeric condition), treat the
+            # comparison as False rather than crashing the engine.
             try:
                 return op_func(float(actual), float(value))
             except (TypeError, ValueError):
-                pass
-        return op_func(actual, value)
+                return False
+        try:
+            return op_func(actual, value)
+        except TypeError:
+            # Mismatched types on a non-numeric op (e.g. comparing a
+            # string to an int via ==). Defensive: return False rather
+            # than 500 the request.
+            return False
 
     async def execute(
         self,
@@ -353,22 +363,47 @@ class AsyncWorkflowEngine:
         field is present (engine proceeds normally) or when the node has
         no condition_field at all (e.g. malformed switch node — let the
         existing evaluation path handle it).
+
+        The field type is inferred from the condition_operator and
+        condition_value so the frontend renders the right control:
+        - Numeric operators (<, <=, >, >=) → number input
+        - Bool condition_value → checkbox
+        - Switch with branches dict → select with branch keys as options
+        - Equality op with non-bool value → text input
         """
         field = node.condition_field
         if not field:
             return None
         if context.get(field) is not None:
             return None
-        # Heuristic for the auto-derived label: use the node's metadata
-        # label if it reads as a question, otherwise prompt for the field
-        # name directly. The frontend can format further.
-        label = node.metadata.label or f"Please provide {field}"
+
+        op = node.condition_operator
+        value = node.condition_value
+
+        field_type = "text"
+        options: list[dict[str, str]] | None = None
+
+        if op == "switch" and node.branches:
+            # Switch node — present the branch keys as a dropdown.
+            field_type = "select"
+            options = [
+                {"value": str(k), "label": str(k).replace("_", " ").title()}
+                for k in node.branches.keys()
+            ]
+        elif op in NUMERIC_OPS:
+            field_type = "number"
+        elif isinstance(value, bool):
+            field_type = "boolean"
+
+        label = node.metadata.label or f"Please provide {field.replace('_', ' ')}"
+        description = node.metadata.description or ""
         return InputField(
             key=field,
             label=label,
-            type="text",
+            type=field_type,
             required=True,
-            description=node.metadata.description or "",
+            options=options,
+            description=description,
         )
 
     async def _emit_node_event(
