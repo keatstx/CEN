@@ -191,7 +191,16 @@
       "type": "CONDITION",
       "metadata": {
         "label": "Cross-Module Dependencies Resolved?",
-        "description": "Example: charity care denial triggers debt engine; uninsured triggers benefits then charity care."
+        "description": "Example: charity care denial triggers debt engine; uninsured triggers benefits then charity care.",
+        "input_schema": [
+          {
+            "key": "dependencies_resolved",
+            "label": "Are all cross-module dependencies resolved?",
+            "type": "boolean",
+            "required": true,
+            "description": "Yes if every prerequisite from upstream modules has been completed."
+          }
+        ]
       },
       "condition_field": "dependencies_resolved",
       "condition_operator": "==",
@@ -210,7 +219,16 @@
       "id": "all_modules_complete_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "All Modules Complete?"
+        "label": "All Modules Complete?",
+        "input_schema": [
+          {
+            "key": "all_modules_complete",
+            "label": "Have all dispatched modules finished running?",
+            "type": "boolean",
+            "required": true,
+            "description": "Wait until each invoked module has reached a terminal state."
+          }
+        ]
       },
       "condition_field": "all_modules_complete",
       "condition_operator": "==",
@@ -230,7 +248,16 @@
       "id": "exception_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Any Exceptions or Failures?"
+        "label": "Any Exceptions or Failures?",
+        "input_schema": [
+          {
+            "key": "exception_count",
+            "label": "How many module exceptions or failures occurred?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 if every module finished cleanly."
+          }
+        ]
       },
       "condition_field": "exception_count",
       "condition_operator": ">",

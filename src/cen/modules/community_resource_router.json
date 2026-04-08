@@ -245,7 +245,15 @@
       "id": "patient_confirmation",
       "type": "CONDITION",
       "metadata": {
-        "label": "Patient Confirmed Receipt?"
+        "label": "Patient Confirmed Receipt?",
+        "input_schema": [
+          {
+            "key": "patient_confirmed",
+            "label": "Did the patient confirm they want to be referred to these resources?",
+            "type": "boolean",
+            "required": true
+          }
+        ]
       },
       "condition_field": "patient_confirmed",
       "condition_operator": "==",
@@ -272,7 +280,16 @@
       "id": "closed_loop",
       "type": "CONDITION",
       "metadata": {
-        "label": "Service Received?"
+        "label": "Service Received?",
+        "input_schema": [
+          {
+            "key": "service_received",
+            "label": "Has the patient received the service yet?",
+            "type": "boolean",
+            "required": true,
+            "description": "Mark Yes once the patient has actually engaged with the resource (called, applied, or received help)."
+          }
+        ]
       },
       "condition_field": "service_received",
       "condition_operator": "==",
@@ -292,7 +309,16 @@
       "id": "barrier_loop_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Retry Available?"
+        "label": "Retry Available?",
+        "input_schema": [
+          {
+            "key": "retry_count",
+            "label": "How many times has the patient tried to engage with this resource so far?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 for first attempt. Up to 2 retries are allowed before escalation."
+          }
+        ]
       },
       "condition_field": "retry_count",
       "condition_operator": "<",

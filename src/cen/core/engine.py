@@ -214,19 +214,33 @@ class AsyncWorkflowEngine:
             elif node.type == NodeType.CONDITION:
                 cached = node_outputs.get(node_id)
                 if cached is None:
-                    # Auto-pause if the condition field is missing from
-                    # context. The frontend will render a single input
-                    # for the user to fill in, then the engine resumes
-                    # and re-evaluates the condition.
-                    auto_field = self._auto_derive_condition_input(node, context)
-                    if auto_field is not None:
-                        pending_input_node = node_id
-                        pending_input_fields = [auto_field]
-                        outcome = f"pending_input:{node.metadata.label or node_id}"
-                        await self._emit_node_event(
-                            session_id, node_id, "CONDITION", "pending_input", context
-                        )
-                        break
+                    # CONDITION input collection. Two paths:
+                    # 1. If the author declared a custom input_schema
+                    #    on the node's metadata, use that — it overrides
+                    #    auto-derivation entirely. Pause if any required
+                    #    field in the schema is missing from context.
+                    # 2. Otherwise auto-derive from the condition field
+                    #    + operator + sibling values.
+                    if node.metadata.input_schema:
+                        missing = self._missing_required_inputs(node, context)
+                        if missing:
+                            pending_input_node = node_id
+                            pending_input_fields = missing
+                            outcome = f"pending_input:{node.metadata.label or node_id}"
+                            await self._emit_node_event(
+                                session_id, node_id, "CONDITION", "pending_input", context
+                            )
+                            break
+                    else:
+                        auto_field = self._auto_derive_condition_input(node, context)
+                        if auto_field is not None:
+                            pending_input_node = node_id
+                            pending_input_fields = [auto_field]
+                            outcome = f"pending_input:{node.metadata.label or node_id}"
+                            await self._emit_node_event(
+                                session_id, node_id, "CONDITION", "pending_input", context
+                            )
+                            break
 
                 executed.append(node_id)
 

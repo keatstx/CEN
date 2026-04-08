@@ -77,7 +77,16 @@
       "id": "request_itemized",
       "type": "CONDITION",
       "metadata": {
-        "label": "Itemized Bill Available?"
+        "label": "Itemized Bill Available?",
+        "input_schema": [
+          {
+            "key": "is_itemized",
+            "label": "Does the patient have an itemized bill?",
+            "type": "boolean",
+            "required": true,
+            "description": "An itemized bill lists each charge separately. If they only have a summary, mark No and the workflow will request one."
+          }
+        ]
       },
       "condition_field": "is_itemized",
       "condition_operator": "==",
@@ -105,7 +114,16 @@
       "id": "sol_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Statute of Limitations Check"
+        "label": "Statute of Limitations Check",
+        "input_schema": [
+          {
+            "key": "within_sol",
+            "label": "Is the debt still within the statute of limitations in this state?",
+            "type": "boolean",
+            "required": true,
+            "description": "Most states have 3-6 year SOLs for medical debt. If unsure, ask the AI Concierge or check the state rule lookup."
+          }
+        ]
       },
       "condition_field": "within_sol",
       "condition_operator": "==",
@@ -182,7 +200,16 @@
       "id": "violations_found",
       "type": "CONDITION",
       "metadata": {
-        "label": "Violations Found?"
+        "label": "Violations Found?",
+        "input_schema": [
+          {
+            "key": "violations_count",
+            "label": "How many billing violations did the audit find?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 if no violations were found. Common violations: balance billing, NSA violations, duplicate charges."
+          }
+        ]
       },
       "condition_field": "violations_count",
       "condition_operator": ">",
@@ -194,7 +221,16 @@
       "id": "no_violation_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Hardship or Payment Plan Path?"
+        "label": "Hardship or Payment Plan Path?",
+        "input_schema": [
+          {
+            "key": "hardship_indicated",
+            "label": "Is the patient experiencing financial hardship?",
+            "type": "boolean",
+            "required": true,
+            "description": "Hardship triggers: unable to afford basic needs, recent job loss, disability, on public benefits."
+          }
+        ]
       },
       "condition_field": "hardship_indicated",
       "condition_operator": "==",
@@ -288,7 +324,16 @@
       "id": "negotiation_continue",
       "type": "CONDITION",
       "metadata": {
-        "label": "Continue Negotiation?"
+        "label": "Continue Negotiation?",
+        "input_schema": [
+          {
+            "key": "negotiation_round_count",
+            "label": "How many negotiation rounds have happened so far?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 for the first round. Up to 3 rounds are allowed before escalation."
+          }
+        ]
       },
       "condition_field": "negotiation_round_count",
       "condition_operator": "<",
@@ -345,7 +390,16 @@
       "id": "remaining_balance_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Remaining Balance > 0?"
+        "label": "Remaining Balance > 0?",
+        "input_schema": [
+          {
+            "key": "remaining_balance",
+            "label": "Remaining balance after the negotiation",
+            "type": "currency",
+            "required": true,
+            "description": "Enter 0 if the debt is fully resolved."
+          }
+        ]
       },
       "condition_field": "remaining_balance",
       "condition_operator": ">",

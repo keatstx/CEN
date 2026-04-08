@@ -85,7 +85,16 @@
       "id": "deadline_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Within Appeal Window?"
+        "label": "Within Appeal Window?",
+        "input_schema": [
+          {
+            "key": "days_remaining",
+            "label": "How many days remain to file the appeal?",
+            "type": "number",
+            "required": true,
+            "description": "Found on the denial letter. Most insurers give 30, 60, or 180 days from the date of denial."
+          }
+        ]
       },
       "condition_field": "days_remaining",
       "condition_operator": ">",
@@ -164,7 +173,16 @@
       "id": "physician_letter_received",
       "type": "CONDITION",
       "metadata": {
-        "label": "Letter Received?"
+        "label": "Letter Received?",
+        "input_schema": [
+          {
+            "key": "physician_letter_received",
+            "label": "Did the physician send a supporting letter?",
+            "type": "boolean",
+            "required": true,
+            "description": "A physician letter strengthens medical-necessity appeals significantly."
+          }
+        ]
       },
       "condition_field": "physician_letter_received",
       "condition_operator": "==",

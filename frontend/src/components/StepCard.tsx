@@ -341,20 +341,45 @@ function FieldInput({
   );
 
   if (field.type === "boolean") {
+    // Two-button radio group (Yes / No) instead of an ambiguous
+    // single checkbox. The user has to pick one — leaving the
+    // form blank doesn't accidentally count as "no".
+    const isYes = value === true;
+    const isNo = value === false;
     return (
       <div>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={!!value}
-            onChange={(e) => onChange(e.target.checked)}
-            className="w-4 h-4"
-          />
-          <span>{field.label}</span>
-          {field.required && (
-            <span className="text-[var(--color-danger)] ml-0.5">*</span>
-          )}
-        </label>
+        {labelEl ?? (
+          <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">
+            {field.label}
+            {field.required && (
+              <span className="text-[var(--color-danger)] ml-0.5">*</span>
+            )}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => onChange(true)}
+            className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
+              isYes
+                ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+                : "bg-[var(--color-bg)] text-[var(--color-text-primary)] border-[var(--color-border)] hover:border-[var(--color-accent)]"
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange(false)}
+            className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
+              isNo
+                ? "bg-[var(--color-accent)] text-white border-[var(--color-accent)]"
+                : "bg-[var(--color-bg)] text-[var(--color-text-primary)] border-[var(--color-border)] hover:border-[var(--color-accent)]"
+            }`}
+          >
+            No
+          </button>
+        </div>
         {description}
       </div>
     );

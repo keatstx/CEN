@@ -76,7 +76,16 @@
       "id": "medicare_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Medicare Eligible?"
+        "label": "Medicare Eligible?",
+        "input_schema": [
+          {
+            "key": "medicare_eligible",
+            "label": "Is the patient Medicare-eligible?",
+            "type": "boolean",
+            "required": true,
+            "description": "Yes if the patient is 65+, has been on SSDI for 24+ months, or has ESRD/ALS."
+          }
+        ]
       },
       "condition_field": "medicare_eligible",
       "condition_operator": "==",
@@ -136,7 +145,16 @@
       "id": "medicaid_branch",
       "type": "CONDITION",
       "metadata": {
-        "label": "Any Medicaid Eligible?"
+        "label": "Any Medicaid Eligible?",
+        "input_schema": [
+          {
+            "key": "medicaid_eligible_count",
+            "label": "How many people in the household qualify for Medicaid?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 if no one qualifies."
+          }
+        ]
       },
       "condition_field": "medicaid_eligible_count",
       "condition_operator": ">",
@@ -156,7 +174,16 @@
       "id": "chip_branch",
       "type": "CONDITION",
       "metadata": {
-        "label": "Any CHIP Eligible Children?"
+        "label": "Any CHIP Eligible Children?",
+        "input_schema": [
+          {
+            "key": "chip_eligible_count",
+            "label": "How many children in the household qualify for CHIP?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 if no children qualify."
+          }
+        ]
       },
       "condition_field": "chip_eligible_count",
       "condition_operator": ">",
@@ -175,7 +202,16 @@
       "id": "aca_branch",
       "type": "CONDITION",
       "metadata": {
-        "label": "Any ACA Eligible?"
+        "label": "Any ACA Eligible?",
+        "input_schema": [
+          {
+            "key": "aca_eligible_count",
+            "label": "How many people qualify for an ACA marketplace plan?",
+            "type": "number",
+            "required": true,
+            "description": "Enter 0 if no one qualifies."
+          }
+        ]
       },
       "condition_field": "aca_eligible_count",
       "condition_operator": ">",
@@ -187,7 +223,16 @@
       "id": "sep_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Open Enrollment or SEP?"
+        "label": "Open Enrollment or SEP?",
+        "input_schema": [
+          {
+            "key": "enrollment_window_open",
+            "label": "Is open enrollment currently open, or does the patient qualify for a Special Enrollment Period?",
+            "type": "boolean",
+            "required": true,
+            "description": "Special enrollment is triggered by life events: job loss, marriage, birth, moving, etc."
+          }
+        ]
       },
       "condition_field": "enrollment_window_open",
       "condition_operator": "==",
@@ -245,7 +290,16 @@
       "id": "determination_received",
       "type": "CONDITION",
       "metadata": {
-        "label": "Determination Received?"
+        "label": "Determination Received?",
+        "input_schema": [
+          {
+            "key": "all_determinations_in",
+            "label": "Have all benefit determinations been received from the agencies?",
+            "type": "boolean",
+            "required": true,
+            "description": "Mark Yes only after every program (Medicaid, CHIP, ACA, etc.) has responded."
+          }
+        ]
       },
       "condition_field": "all_determinations_in",
       "condition_operator": "==",
@@ -257,7 +311,15 @@
       "id": "determination_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Approved or Denied?"
+        "label": "Approved or Denied?",
+        "input_schema": [
+          {
+            "key": "any_denied",
+            "label": "Was any benefit application denied?",
+            "type": "boolean",
+            "required": true
+          }
+        ]
       },
       "condition_field": "any_denied",
       "condition_operator": "==",

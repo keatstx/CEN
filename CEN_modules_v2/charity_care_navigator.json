@@ -174,7 +174,16 @@
       "type": "CONDITION",
       "metadata": {
         "label": "Presumptive Eligibility?",
-        "description": "Check Medicaid, SNAP, homeless, deceased, or other presumptive triggers."
+        "description": "Check Medicaid, SNAP, homeless, deceased, or other presumptive triggers.",
+        "input_schema": [
+          {
+            "key": "presumptive_eligible",
+            "label": "Does the patient qualify under any presumptive eligibility trigger?",
+            "type": "boolean",
+            "required": true,
+            "description": "Patients on Medicaid, SNAP, WIC, TANF, or who are homeless or recently deceased usually qualify for automatic charity care without further proof."
+          }
+        ]
       },
       "condition_field": "presumptive_eligible",
       "condition_operator": "==",
@@ -187,7 +196,16 @@
       "type": "CONDITION",
       "metadata": {
         "label": "FPL Tier Check",
-        "description": "Compare income to hospital's full-write-off threshold."
+        "description": "Compare income to hospital's full-write-off threshold.",
+        "input_schema": [
+          {
+            "key": "income_fpl_percent",
+            "label": "Patient household income as % of Federal Poverty Level",
+            "type": "number",
+            "required": true,
+            "description": "Use the household income calculator. Enter 100 for 100% of FPL, 200 for 200%, etc."
+          }
+        ]
       },
       "condition_field": "income_fpl_percent",
       "condition_operator": "<",
@@ -199,7 +217,16 @@
       "id": "sliding_scale_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Sliding Scale Eligible?"
+        "label": "Sliding Scale Eligible?",
+        "input_schema": [
+          {
+            "key": "income_fpl_percent",
+            "label": "Patient household income as % of Federal Poverty Level",
+            "type": "number",
+            "required": true,
+            "description": "Use the household income calculator. Enter 100 for 100% of FPL, 200 for 200%, etc."
+          }
+        ]
       },
       "condition_field": "income_fpl_percent",
       "condition_operator": "<",
@@ -248,7 +275,16 @@
       "id": "submission_confirmed",
       "type": "CONDITION",
       "metadata": {
-        "label": "Submission Confirmed?"
+        "label": "Submission Confirmed?",
+        "input_schema": [
+          {
+            "key": "submission_confirmed",
+            "label": "Was the charity care application submitted?",
+            "type": "boolean",
+            "required": true,
+            "description": "Confirm the application was received by the hospital billing office."
+          }
+        ]
       },
       "condition_field": "submission_confirmed",
       "condition_operator": "==",
@@ -276,7 +312,33 @@
       "id": "determination",
       "type": "CONDITION",
       "metadata": {
-        "label": "Determination Received?"
+        "label": "Determination Received?",
+        "input_schema": [
+          {
+            "key": "determination_status",
+            "label": "What did the hospital decide on the charity care application?",
+            "type": "select",
+            "required": true,
+            "options": [
+              {
+                "value": "approved_full",
+                "label": "Approved - full write-off"
+              },
+              {
+                "value": "approved_partial",
+                "label": "Approved - partial discount"
+              },
+              {
+                "value": "denied",
+                "label": "Denied"
+              },
+              {
+                "value": "pending",
+                "label": "Still pending"
+              }
+            ]
+          }
+        ]
       },
       "condition_field": "determination_status",
       "condition_operator": "in",
@@ -321,7 +383,29 @@
       "id": "appeal_outcome",
       "type": "CONDITION",
       "metadata": {
-        "label": "Appeal Outcome"
+        "label": "Appeal Outcome",
+        "input_schema": [
+          {
+            "key": "appeal_status",
+            "label": "What was the outcome of the appeal?",
+            "type": "select",
+            "required": true,
+            "options": [
+              {
+                "value": "overturned",
+                "label": "Overturned - appeal won"
+              },
+              {
+                "value": "upheld",
+                "label": "Upheld - appeal denied"
+              },
+              {
+                "value": "pending",
+                "label": "Still pending"
+              }
+            ]
+          }
+        ]
       },
       "condition_field": "appeal_status",
       "condition_operator": "==",
@@ -365,7 +449,16 @@
       "id": "remaining_balance_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Remaining Balance > 0?"
+        "label": "Remaining Balance > 0?",
+        "input_schema": [
+          {
+            "key": "remaining_balance",
+            "label": "Remaining balance the patient still owes after charity care",
+            "type": "currency",
+            "required": true,
+            "description": "Enter 0 if the bill is fully resolved."
+          }
+        ]
       },
       "condition_field": "remaining_balance",
       "condition_operator": ">",
