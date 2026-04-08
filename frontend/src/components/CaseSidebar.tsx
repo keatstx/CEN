@@ -15,6 +15,7 @@ interface Props {
   selectedCaseId: string | null;
   onSelectCase: (id: string) => void;
   onNewCase: () => void;
+  onDeleteCase: (id: string) => void;
   loading: boolean;
 }
 
@@ -57,6 +58,7 @@ export default function CaseSidebar({
   selectedCaseId,
   onSelectCase,
   onNewCase,
+  onDeleteCase,
   loading,
 }: Props) {
   return (
@@ -131,10 +133,10 @@ export default function CaseSidebar({
         ) : (
           <ul className="space-y-1 max-h-[280px] overflow-y-auto -mx-1 px-1">
             {cases.map((c) => (
-              <li key={c.id}>
+              <li key={c.id} className="group relative">
                 <button
                   onClick={() => onSelectCase(c.id)}
-                  className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
+                  className={`w-full text-left px-2 py-1.5 pr-7 rounded text-xs transition-colors ${
                     selectedCaseId === c.id
                       ? "bg-[var(--color-bg)] border border-[var(--color-accent)]"
                       : "hover:bg-[var(--color-bg)] border border-transparent"
@@ -151,6 +153,24 @@ export default function CaseSidebar({
                     <span>{STATUS_LABEL[c.status]}</span>
                     <span>{relativeTime(c.updated_at)}</span>
                   </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (
+                      window.confirm(
+                        `Delete "${c.name || c.id.slice(0, 8)}"? This cannot be undone.`,
+                      )
+                    ) {
+                      onDeleteCase(c.id);
+                    }
+                  }}
+                  disabled={loading}
+                  title="Delete case"
+                  className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 hover:text-[var(--color-danger)] text-[var(--color-text-muted)] text-xs px-1.5 py-0.5 rounded transition-opacity"
+                >
+                  ✕
                 </button>
               </li>
             ))}

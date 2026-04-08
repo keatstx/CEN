@@ -3,6 +3,7 @@ import {
   approveSession,
   createCase,
   createProject,
+  deleteCase,
   executeWorkflow,
   getCase,
   listCases,
@@ -149,6 +150,24 @@ export default function Executor({ modules }: Props) {
     }
   };
 
+  const handleDeleteCase = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteCase(id);
+      // Clear selection if we just deleted the active case.
+      if (selectedCaseId === id) {
+        setSelectedCaseId(null);
+        setActiveCase(null);
+      }
+      await refreshCases();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete case");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleApprove = async () => {
     if (!activeCase) return;
     setLoading(true);
@@ -188,6 +207,7 @@ export default function Executor({ modules }: Props) {
         selectedCaseId={selectedCaseId}
         onSelectCase={setSelectedCaseId}
         onNewCase={handleNewCase}
+        onDeleteCase={handleDeleteCase}
         loading={loading}
       />
 

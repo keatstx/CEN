@@ -83,6 +83,13 @@ export function provideInput(
   });
 }
 
+export async function deleteCase(id: string): Promise<void> {
+  const res = await fetch(`/cases/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Delete failed: ${res.status}`);
+  }
+}
+
 // Legacy aliases retained for now — will be removed once App.tsx
 // migrates fully to the case-named methods.
 export const createSession = createCase;
