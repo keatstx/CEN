@@ -7,7 +7,29 @@
       "id": "intake_start",
       "type": "ACTION",
       "metadata": {
-        "label": "Case Intake Start"
+        "label": "Case Intake Start",
+        "input_schema": [
+          {
+            "key": "patient_name",
+            "label": "Patient name",
+            "type": "text",
+            "required": true,
+            "description": "First and last name as shown on the bill or insurance card."
+          },
+          {
+            "key": "patient_dob",
+            "label": "Patient date of birth",
+            "type": "date",
+            "required": true
+          },
+          {
+            "key": "patient_phone",
+            "label": "Best phone number to reach the patient",
+            "type": "text",
+            "required": false,
+            "description": "Optional - so we can follow up if needed."
+          }
+        ]
       }
     },
     {

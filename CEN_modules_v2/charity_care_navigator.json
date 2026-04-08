@@ -8,7 +8,29 @@
       "type": "ACTION",
       "metadata": {
         "label": "Case Intake Start",
-        "description": "Create case record and capture referral source."
+        "description": "Create case record and capture referral source.",
+        "input_schema": [
+          {
+            "key": "patient_name",
+            "label": "Patient name",
+            "type": "text",
+            "required": true,
+            "description": "First and last name as shown on the bill or insurance card."
+          },
+          {
+            "key": "patient_dob",
+            "label": "Patient date of birth",
+            "type": "date",
+            "required": true
+          },
+          {
+            "key": "patient_phone",
+            "label": "Best phone number to reach the patient",
+            "type": "text",
+            "required": false,
+            "description": "Optional - so we can follow up if needed."
+          }
+        ]
       }
     },
     {
@@ -66,7 +88,23 @@
       "type": "ACTION",
       "metadata": {
         "label": "Document Collection",
-        "description": "Collect pay stubs, tax returns, ID, proof of residency, household composition, hospital bill."
+        "description": "Collect pay stubs, tax returns, ID, proof of residency, household composition, hospital bill.",
+        "input_schema": [
+          {
+            "key": "income_documentation",
+            "label": "Upload proof of income (pay stub, W-2, or tax return)",
+            "type": "file",
+            "required": false,
+            "description": "Optional - upload now if you have it, or we can collect later."
+          },
+          {
+            "key": "income_documentation_notes",
+            "label": "Notes about income documentation",
+            "type": "text",
+            "required": false,
+            "description": "If the patient doesn't have documents yet, note what's missing."
+          }
+        ]
       }
     },
     {

@@ -25,11 +25,19 @@ class TestDebtCancellationEngineFlow:
         cid = case["id"]
         assert case["project_id"] is not None
 
-        # 2. Kick off execution. The intake_start runs, then
-        #    hipaa_consent (APPROVAL) pauses the workflow.
+        # 2. Kick off execution with patient identity already provided
+        #    so we skip the intake_start pause and land on the HIPAA
+        #    approval gate first (this test is specifically about the
+        #    later ingest_bill pause).
         ex = await client.post(
             f"/execute?session_id={cid}",
-            json={"module_name": "debt_cancellation_engine", "context": {}},
+            json={
+                "module_name": "debt_cancellation_engine",
+                "context": {
+                    "patient_name": "Test Patient",
+                    "patient_dob": "1980-01-01",
+                },
+            },
         )
         assert ex.status_code == 200
         result = ex.json()
@@ -107,9 +115,16 @@ class TestInsuranceAppealFlow:
         cid = cr.json()["id"]
 
         # Kick off — first pause is the HIPAA consent approval.
+        # Pre-fill patient identity so we skip the intake_start pause.
         ex = await client.post(
             f"/execute?session_id={cid}",
-            json={"module_name": "insurance_appeal_assistant", "context": {}},
+            json={
+                "module_name": "insurance_appeal_assistant",
+                "context": {
+                    "patient_name": "Test Patient",
+                    "patient_dob": "1980-01-01",
+                },
+            },
         )
         assert ex.json()["final_outcome"].startswith("pending_approval:")
 

@@ -12,22 +12,51 @@ from cen.core.models import WorkflowInput
 
 MODULES_DIR = Path(__file__).resolve().parent.parent.parent / "src" / "cen" / "modules"
 
+# Universal patient identity fields — required by every module's
+# entry intake node (intake_start / case_create) per the v1 input
+# schema authoring pass.
+_PATIENT = {
+    "patient_name": "Test Patient",
+    "patient_dob": "1980-01-01",
+}
+
 MODULE_CONTEXTS = {
-    "charity_care_navigator": {"income_fpl_percent": 150},
-    "debt_cancellation_engine": {"bill_summary": "test bill", "violations_count": 2},
+    "charity_care_navigator": {**_PATIENT, "income_fpl_percent": 150},
+    "debt_cancellation_engine": {
+        **_PATIENT,
+        "bill_summary": "test bill",
+        "violations_count": 2,
+        # ingest_bill input_schema requires these
+        "bill_total_amount": 1234.56,
+        "provider_name": "Test Hospital",
+    },
     "insurance_appeal_assistant": {
+        **_PATIENT,
         "denial_reason": "claim denied",
         "denial_type": "medical_necessity",
+        # denial_intake input_schema requires claim_number too
+        "claim_number": "TEST-12345",
     },
     "benefits_enrollment_navigator": {
+        **_PATIENT,
         "income_fpl_percent": 100,
         "has_children_under_19": True,
+        # collect_household input_schema requires these
+        "household_size": 4,
+        "annual_household_income": 35000,
     },
     "community_resource_router": {
+        **_PATIENT,
+        # sdoh_screener input_schema requires zip_code
         "needs_housing": True,
         "needs_food": False,
         "needs_transport": True,
         "zip_code": "12345",
+    },
+    "master_case_orchestrator": {
+        **_PATIENT,
+        # triage_intake input_schema requires primary_concern
+        "primary_concern": "medical_debt",
     },
 }
 
