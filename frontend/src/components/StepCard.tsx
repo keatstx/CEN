@@ -479,10 +479,9 @@ function FileFieldInput({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedName, setUploadedName] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const upload = async (file: File) => {
     setUploading(true);
     setUploadError(null);
     try {
@@ -499,23 +498,62 @@ function FileFieldInput({
   return (
     <div>
       {labelEl}
-      <input
-        type="file"
-        onChange={handleFile}
-        disabled={uploading}
-        className="w-full text-xs"
-        accept=".pdf,.png,.jpg,.jpeg,.heic,.tif,.tiff,.gif,.docx,.txt"
-      />
-      {uploading && (
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
-          Uploading…
-        </p>
-      )}
-      {uploadedName && !uploading && (
-        <p className="text-[11px] text-[var(--color-success)] mt-1">
-          ✓ Uploaded: {uploadedName}
-        </p>
-      )}
+      <label
+        className={`block border-2 border-dashed rounded-lg px-4 py-5 text-center cursor-pointer transition-colors ${
+          dragOver
+            ? "border-[var(--color-accent)] bg-[var(--color-bg)]"
+            : uploadedName
+              ? "border-[var(--color-success)] bg-[var(--color-bg)]"
+              : "border-[var(--color-border)] hover:border-[var(--color-accent)] hover:bg-[var(--color-bg)]"
+        }`}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) upload(file);
+        }}
+      >
+        <input
+          type="file"
+          className="hidden"
+          accept=".pdf,.png,.jpg,.jpeg,.heic,.tif,.tiff,.gif,.docx,.txt"
+          disabled={uploading}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) upload(file);
+          }}
+        />
+        {uploading && (
+          <p className="text-xs text-[var(--color-text-muted)]">Uploading…</p>
+        )}
+        {!uploading && uploadedName && (
+          <p className="text-xs text-[var(--color-success)] font-medium">
+            ✓ Uploaded: {uploadedName}
+          </p>
+        )}
+        {!uploading && !uploadedName && (
+          <>
+            <div className="text-xl mb-1" aria-hidden>
+              📎
+            </div>
+            <p className="text-xs font-medium text-[var(--color-text-primary)]">
+              Drop a file here or click to upload
+            </p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+              PDF, image, or DOCX
+            </p>
+          </>
+        )}
+      </label>
       {uploadError && (
         <p className="text-[11px] text-[var(--color-danger)] mt-1">
           {uploadError}
@@ -523,8 +561,8 @@ function FileFieldInput({
       )}
       {description}
       {value && !uploadedName && (
-        <p className="text-[10px] font-mono text-[var(--color-text-muted)] mt-1">
-          Already uploaded
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+          ✓ A file is already attached for this field.
         </p>
       )}
     </div>

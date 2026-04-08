@@ -227,6 +227,13 @@ export function artifactDownloadUrl(artifactId: string): string {
   return `/artifacts/${artifactId}`;
 }
 
+export async function deleteArtifact(artifactId: string): Promise<void> {
+  const res = await fetch(`/artifacts/${artifactId}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Delete failed: ${res.status}`);
+  }
+}
+
 // ── Projects ──
 
 export function listProjects(limit = 50): Promise<Project[]> {

@@ -130,3 +130,53 @@ class TestArtifactDownload:
     async def test_download_nonexistent_404(self, client: AsyncClient):
         resp = await client.get("/artifacts/does-not-exist")
         assert resp.status_code == 404
+
+
+class TestArtifactDelete:
+    async def test_delete_artifact_succeeds(self, client: AsyncClient):
+        cid = await _create_case(client)
+        upload = await client.post(
+            f"/cases/{cid}/artifacts",
+            files={"file": ("bill.pdf", _FAKE_PDF, "application/pdf")},
+        )
+        aid = upload.json()["id"]
+
+        # Confirm it's listed.
+        list_resp = await client.get(f"/cases/{cid}/artifacts")
+        assert any(a["id"] == aid for a in list_resp.json())
+
+        # Delete.
+        del_resp = await client.delete(f"/artifacts/{aid}")
+        assert del_resp.status_code == 204
+
+        # No longer listed.
+        list_after = await client.get(f"/cases/{cid}/artifacts")
+        assert all(a["id"] != aid for a in list_after.json())
+
+        # Download now 404s.
+        get_after = await client.get(f"/artifacts/{aid}")
+        assert get_after.status_code == 404
+
+    async def test_delete_nonexistent_artifact_404(self, client: AsyncClient):
+        resp = await client.delete("/artifacts/does-not-exist")
+        assert resp.status_code == 404
+
+    async def test_delete_supports_multi_upload_then_delete_one(
+        self, client: AsyncClient
+    ):
+        cid = await _create_case(client)
+        ids = []
+        for i in range(3):
+            r = await client.post(
+                f"/cases/{cid}/artifacts",
+                files={"file": (f"f_{i}.pdf", _FAKE_PDF, "application/pdf")},
+            )
+            ids.append(r.json()["id"])
+        # Delete the middle one.
+        await client.delete(f"/artifacts/{ids[1]}")
+        # The other two are still there.
+        list_resp = await client.get(f"/cases/{cid}/artifacts")
+        remaining = {a["id"] for a in list_resp.json()}
+        assert ids[0] in remaining
+        assert ids[1] not in remaining
+        assert ids[2] in remaining

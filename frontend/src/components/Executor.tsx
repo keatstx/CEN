@@ -13,6 +13,7 @@ import {
 import type { Project, Session } from "../types";
 import CaseSidebar from "./CaseSidebar";
 import Concierge from "./Concierge";
+import Documents from "./Documents";
 import StepCard from "./StepCard";
 import Stepper from "./Stepper";
 
@@ -331,6 +332,8 @@ export default function Executor({ modules }: Props) {
               onSubmit={handleProvideInput}
               onApprove={handleApprove}
             />
+
+            <Documents caseRecord={activeCase} />
           </>
         )}
       </div>

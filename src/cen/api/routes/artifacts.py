@@ -206,3 +206,26 @@ async def download_artifact(
             "Cache-Control": "private, no-store",
         },
     )
+
+
+@router.delete("/artifacts/{artifact_id}", status_code=204)
+async def delete_artifact(
+    artifact_id: str,
+    artifact_store: ArtifactStore = Depends(get_artifact_store),
+    storage: StorageBackend = Depends(get_storage_backend),
+    user: User = Depends(get_current_user),
+) -> None:
+    """Delete an artifact (metadata + stored blob). Cross-tenant
+    attempts return 404 to avoid leaking existence."""
+    artifact = await artifact_store.get(artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    if artifact.owner_id is not None and artifact.owner_id != user.id:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    # Best-effort blob delete; the store may already be missing the
+    # blob if a previous delete partially succeeded — that's OK.
+    try:
+        await storage.delete(artifact.storage_key)
+    except Exception:
+        pass
+    await artifact_store.delete(artifact_id)
