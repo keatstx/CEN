@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AOPDefinition, ValidationIssue } from "../../types";
 import {
   NODE_COLORS,
@@ -16,20 +16,24 @@ interface Props {
   onSelectNode: (id: string | null) => void;
 }
 
+const CANVAS_HEIGHT = 480;
+const ZOOM_MIN = 0.2;
+const ZOOM_MAX = 3;
+
 /**
  * Visual representation of an SOP draft with issue overlays.
  *
- * - Nodes carry red rings when an error references them, yellow rings
- *   for warnings, and a strikethrough/gray opacity when unreachable.
- * - Edges that participate in a cycle are dashed red.
- * - Branch pointers that target a node not in the draft are drawn as
- *   dangling red arrows ending at a "?" terminal.
- * - Click a node -> calls onSelectNode(id) so the parent can scroll
- *   the validation panel to its issues. Re-click to clear selection.
+ * Pan/zoom controls (mouse wheel, drag, +/-/Fit/1:1 buttons). When a
+ * node is selected (either by clicking it on the DAG or by clicking
+ * an issue in the ValidationPanel), the canvas auto-pans to bring it
+ * to center.
  *
- * Fit-to-screen by default — no pan/zoom for v1. SOPs typically have
- * 10–40 nodes; the live DAG Viewer (with pan/zoom) handles the
- * 100+-node case.
+ * Overlay rules:
+ * - Red ring on nodes with errors, yellow on warnings, gray opacity +
+ *   strikethrough on unreachable.
+ * - Cycle edges drawn dashed-red.
+ * - Branches pointing at unknown ids drawn as dangling red arrows
+ *   ending in a "?" terminal.
  */
 export default function DraftDAG({
   draft,
@@ -38,12 +42,24 @@ export default function DraftDAG({
   onSelectNode,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [size, setSize] = useState({ w: 0, h: CANVAS_HEIGHT });
+  const [zoom, setZoom] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const dragging = useRef<{
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+  } | null>(null);
 
+  // Track container width via ResizeObserver so the SVG fills the
+  // available space and the fit-to-screen math is correct.
   useEffect(() => {
     const c = containerRef.current;
     if (!c || typeof ResizeObserver === "undefined") return;
-    const update = () => setSize({ w: c.clientWidth, h: c.clientHeight });
+    const update = () =>
+      setSize({ w: c.clientWidth, h: c.clientHeight || CANVAS_HEIGHT });
     update();
     const ro = new ResizeObserver(update);
     ro.observe(c);
@@ -59,7 +75,7 @@ export default function DraftDAG({
     [layout],
   );
 
-  // Group issues by node id for quick overlay lookups.
+  // Issue lookups.
   const issuesByNode = useMemo(() => {
     const map = new Map<string, ValidationIssue[]>();
     for (const issue of issues) {
@@ -103,17 +119,74 @@ export default function DraftDAG({
     [draft],
   );
 
-  // Fit-to-screen scale: shrink so the SVG fits the container width.
-  const scale =
-    size.w > 0 ? Math.min(1, size.w / Math.max(layout.svgW, 1)) : 1;
-  const scaledW = layout.svgW * scale;
-  const scaledH = layout.svgH * scale;
+  // Fit-to-screen — compute zoom + center so the whole layout fits
+  // the canvas. Stable and predictable.
+  const fit = () => {
+    if (size.w <= 0) return;
+    const z = Math.min(size.w / layout.svgW, CANVAS_HEIGHT / layout.svgH, 1);
+    setZoom(z);
+    setTx((size.w - layout.svgW * z) / 2);
+    setTy((CANVAS_HEIGHT - layout.svgH * z) / 2);
+  };
+
+  // Run fit() on first render and whenever the draft / canvas width
+  // changes. This is the "land in a sensible state" behavior.
+  useEffect(() => {
+    fit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, size.w]);
+
+  // Auto-pan when the selected node changes — center it in the
+  // visible canvas. The user clicked an issue or a node and expects
+  // the highlight to be visible without manual scrolling.
+  useEffect(() => {
+    if (!selectedNodeId || size.w <= 0) return;
+    const ln = posMap.get(selectedNodeId);
+    if (!ln) return;
+    const targetX = size.w / 2 - (ln.x + NODE_W / 2) * zoom;
+    const targetY = CANVAS_HEIGHT / 2 - (ln.y + NODE_H / 2) * zoom;
+    setTx(targetX);
+    setTy(targetY);
+    // Don't include `zoom` as a dep — would trigger every wheel event.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNodeId]);
+
+  // Pan/zoom handlers — wheel zooms anchored on the cursor; drag pans.
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const c = containerRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * factor));
+    const wx = (mx - tx) / zoom;
+    const wy = (my - ty) / zoom;
+    setZoom(newZoom);
+    setTx(mx - wx * newZoom);
+    setTy(my - wy * newZoom);
+  };
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    // Don't start a drag when the user clicks a node — let that
+    // event fire (the node's onClick is on the <g> element).
+    if ((e.target as Element).closest("g[data-node]")) return;
+    dragging.current = { x: e.clientX, y: e.clientY, tx, ty };
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!dragging.current) return;
+    setTx(dragging.current.tx + (e.clientX - dragging.current.x));
+    setTy(dragging.current.ty + (e.clientY - dragging.current.y));
+  };
+  const onMouseUp = () => {
+    dragging.current = null;
+  };
 
   return (
     <div
-      ref={containerRef}
       className="card overflow-hidden p-0"
-      style={{ minHeight: 240 }}
+      style={{ height: CANVAS_HEIGHT + 38 }}
     >
       <div
         className="px-3 py-2 border-b flex items-center justify-between text-xs"
@@ -122,17 +195,39 @@ export default function DraftDAG({
         <span className="font-semibold">
           Draft workflow ({draft.nodes.length} steps)
         </span>
-        <Legend />
+        <div className="flex items-center gap-3">
+          <Legend />
+          <ZoomControls
+            zoom={zoom}
+            onZoomIn={() => setZoom((z) => Math.min(ZOOM_MAX, z * 1.2))}
+            onZoomOut={() => setZoom((z) => Math.max(ZOOM_MIN, z / 1.2))}
+            onFit={fit}
+            onReset={() => {
+              setZoom(1);
+              setTx(0);
+              setTy(0);
+            }}
+          />
+        </div>
       </div>
       <div
-        className="overflow-auto"
-        style={{ background: "var(--color-bg)", maxHeight: 480 }}
+        ref={containerRef}
+        className="relative"
+        style={{
+          height: CANVAS_HEIGHT,
+          background: "var(--color-bg)",
+          cursor: dragging.current ? "grabbing" : "grab",
+          userSelect: "none",
+        }}
+        onWheel={onWheel}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
       >
         <svg
-          width={Math.max(scaledW, size.w || 0)}
-          height={Math.max(scaledH, 240)}
-          viewBox={`0 0 ${layout.svgW} ${layout.svgH}`}
-          preserveAspectRatio="xMidYMin meet"
+          width={size.w || 800}
+          height={CANVAS_HEIGHT}
           style={{ display: "block" }}
         >
           <defs>
@@ -160,61 +255,69 @@ export default function DraftDAG({
             </marker>
           </defs>
 
-          {/* Edges */}
-          {draft.edges.map((edge, idx) => {
-            const from = posMap.get(edge.source);
-            const to = posMap.get(edge.target);
-            if (!from || !to) return null;
-            const inCycle =
-              cycleNodeIds.has(edge.source) && cycleNodeIds.has(edge.target);
-            return (
-              <DraftEdge
-                key={`e-${idx}`}
-                from={from}
-                to={to}
-                label={edge.label}
-                isCycle={inCycle}
-              />
-            );
-          })}
+          <g transform={`translate(${tx},${ty}) scale(${zoom})`}>
+            {/* Edges */}
+            {draft.edges.map((edge, idx) => {
+              const from = posMap.get(edge.source);
+              const to = posMap.get(edge.target);
+              if (!from || !to) return null;
+              const inCycle =
+                cycleNodeIds.has(edge.source) &&
+                cycleNodeIds.has(edge.target);
+              return (
+                <DraftEdge
+                  key={`e-${idx}`}
+                  from={from}
+                  to={to}
+                  label={edge.label}
+                  isCycle={inCycle}
+                />
+              );
+            })}
 
-          {/* Branch pointers that target unknown nodes — drawn as
-              dangling red arrows so the user sees the broken link. */}
-          {draft.nodes.map((n) => {
-            const from = posMap.get(n.id);
-            if (!from) return null;
-            const broken: { side: "true" | "false"; target: string }[] = [];
-            if (n.true_next && !validNodeIds.has(n.true_next)) {
-              broken.push({ side: "true", target: n.true_next });
-            }
-            if (n.false_next && !validNodeIds.has(n.false_next)) {
-              broken.push({ side: "false", target: n.false_next });
-            }
-            return broken.map((b, i) => (
-              <DanglingBranch key={`b-${n.id}-${i}`} from={from} side={b.side} />
-            ));
-          })}
+            {/* Dangling branches */}
+            {draft.nodes.map((n) => {
+              const from = posMap.get(n.id);
+              if (!from) return null;
+              const broken: { side: "true" | "false" }[] = [];
+              if (n.true_next && !validNodeIds.has(n.true_next)) {
+                broken.push({ side: "true" });
+              }
+              if (n.false_next && !validNodeIds.has(n.false_next)) {
+                broken.push({ side: "false" });
+              }
+              return broken.map((b, i) => (
+                <DanglingBranch
+                  key={`b-${n.id}-${i}`}
+                  from={from}
+                  side={b.side}
+                />
+              ));
+            })}
 
-          {/* Nodes */}
-          {layout.positioned.map((ln) => {
-            const nodeIssues = issuesByNode.get(ln.id) ?? [];
-            const hasError = nodeIssues.some((i) => i.severity === "error");
-            const hasWarning = nodeIssues.some((i) => i.severity === "warning");
-            const isUnreachable = unreachableNodeIds.has(ln.id);
-            return (
-              <DraftNode
-                key={ln.id}
-                ln={ln}
-                selected={selectedNodeId === ln.id}
-                hasError={hasError}
-                hasWarning={hasWarning}
-                isUnreachable={isUnreachable}
-                onClick={() =>
-                  onSelectNode(selectedNodeId === ln.id ? null : ln.id)
-                }
-              />
-            );
-          })}
+            {/* Nodes */}
+            {layout.positioned.map((ln) => {
+              const nodeIssues = issuesByNode.get(ln.id) ?? [];
+              const hasError = nodeIssues.some((i) => i.severity === "error");
+              const hasWarning = nodeIssues.some(
+                (i) => i.severity === "warning",
+              );
+              const isUnreachable = unreachableNodeIds.has(ln.id);
+              return (
+                <DraftNode
+                  key={ln.id}
+                  ln={ln}
+                  selected={selectedNodeId === ln.id}
+                  hasError={hasError}
+                  hasWarning={hasWarning}
+                  isUnreachable={isUnreachable}
+                  onClick={() =>
+                    onSelectNode(selectedNodeId === ln.id ? null : ln.id)
+                  }
+                />
+              );
+            })}
+          </g>
         </svg>
       </div>
     </div>
@@ -222,6 +325,70 @@ export default function DraftDAG({
 }
 
 // ── Subcomponents ──────────────────────────────────────────────────
+
+
+function ZoomControls({
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onFit,
+  onReset,
+}: {
+  zoom: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFit: () => void;
+  onReset: () => void;
+}) {
+  const btn =
+    "px-1.5 py-0.5 rounded border hover:bg-[var(--color-bg)] text-[11px]";
+  return (
+    <div
+      className="flex items-center gap-1"
+      style={{ borderColor: "var(--color-border)" }}
+    >
+      <button
+        type="button"
+        className={btn}
+        onClick={onZoomIn}
+        title="Zoom in"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        +
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={onZoomOut}
+        title="Zoom out"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        −
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={onFit}
+        title="Fit to screen"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        Fit
+      </button>
+      <button
+        type="button"
+        className={btn}
+        onClick={onReset}
+        title="Reset to 100%"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        1:1
+      </button>
+      <span className="text-[10px] font-mono text-[var(--color-text-muted)] w-10 text-right">
+        {Math.round(zoom * 100)}%
+      </span>
+    </div>
+  );
+}
 
 
 function DraftEdge({
@@ -333,8 +500,11 @@ function DraftNode({
   const label = ln.node.metadata.label || ln.id;
 
   let ringColor = colors.stroke;
-  let ringWidth = selected ? 2.5 : 1.25;
-  if (hasError) {
+  let ringWidth = selected ? 3 : 1.25;
+  if (selected) {
+    ringColor = "var(--color-accent)";
+    ringWidth = 3.5;
+  } else if (hasError) {
     ringColor = "var(--color-danger)";
     ringWidth = 2.5;
   } else if (hasWarning) {
@@ -345,6 +515,7 @@ function DraftNode({
 
   return (
     <g
+      data-node="true"
       onClick={onClick}
       style={{ cursor: "pointer", opacity }}
     >
@@ -411,17 +582,6 @@ function Legend() {
           style={{ background: "var(--color-warning, #b45309)" }}
         />
         warning
-      </span>
-      <span className="flex items-center gap-1">
-        <span
-          className="inline-block w-3 h-0.5"
-          style={{
-            background: "var(--color-danger)",
-            backgroundImage:
-              "repeating-linear-gradient(to right, var(--color-danger) 0 4px, transparent 4px 7px)",
-          }}
-        />
-        cycle
       </span>
     </div>
   );

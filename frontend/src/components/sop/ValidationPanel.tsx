@@ -16,6 +16,9 @@ interface Props {
    * the panel scrolls the first matching issue into view and bolds
    * its border. */
   highlightNodeId?: string | null;
+  /** Click an issue row -> highlight that node on the DAG (parent
+   * sets the shared selectedNodeId). null clears the selection. */
+  onSelectIssue?: (nodeId: string | null) => void;
 }
 
 /**
@@ -33,6 +36,7 @@ export default function ValidationPanel({
   sop,
   onDraftUpdated,
   highlightNodeId,
+  onSelectIssue,
 }: Props) {
   const highlightRef = useRef<HTMLLIElement | null>(null);
 
@@ -150,6 +154,7 @@ export default function ValidationPanel({
               appliedFixKey={appliedFixKey}
               highlight={isHighlight}
               rowRef={isHighlight ? highlightRef : undefined}
+              onSelectIssue={onSelectIssue}
             />
           );
         })}
@@ -167,6 +172,7 @@ export default function ValidationPanel({
               appliedFixKey={appliedFixKey}
               highlight={isHighlight}
               rowRef={isHighlight ? highlightRef : undefined}
+              onSelectIssue={onSelectIssue}
             />
           );
         })}
@@ -184,6 +190,7 @@ function IssueRow({
   appliedFixKey,
   highlight,
   rowRef,
+  onSelectIssue,
 }: {
   issue: ValidationIssue;
   issueKey: string;
@@ -193,9 +200,11 @@ function IssueRow({
   appliedFixKey: string | null;
   highlight: boolean;
   rowRef?: React.Ref<HTMLLIElement>;
+  onSelectIssue?: (nodeId: string | null) => void;
 }) {
   const color =
     severity === "error" ? "var(--color-error)" : "var(--color-warning, #b45309)";
+  const canHighlight = !!issue.node_id && !!onSelectIssue;
   return (
     <li
       ref={rowRef}
@@ -207,7 +216,20 @@ function IssueRow({
         borderLeftWidth: highlight ? "4px" : "2px",
       }}
     >
-      <div style={{ color }}>
+      <div
+        style={{
+          color,
+          cursor: canHighlight ? "pointer" : "default",
+        }}
+        title={canHighlight ? "Click to highlight on the DAG" : undefined}
+        onClick={() => {
+          if (canHighlight && issue.node_id && onSelectIssue) {
+            // Toggle: re-clicking the same issue clears the selection.
+            onSelectIssue(highlight ? null : issue.node_id);
+          }
+        }}
+        className={canHighlight ? "hover:underline" : ""}
+      >
         {issue.node_id ? <code className="font-mono mr-1">{issue.node_id}</code> : null}
         {issue.message}
       </div>

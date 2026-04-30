@@ -428,6 +428,7 @@ function ReviewPane({
             sop={sop}
             onDraftUpdated={onDraftUpdated}
             highlightNodeId={selectedNodeId}
+            onSelectIssue={setSelectedNodeId}
           />
           <NodeTable nodes={sop.draft_module.nodes} />
           {sop.status === "extracted" && (
