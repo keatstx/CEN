@@ -139,7 +139,10 @@ class TestApprovalNode:
             WorkflowInput(module_name="approval_test", context={})
         )
         assert result.final_outcome.startswith("pending_approval:")
-        assert "gate" in result.executed_nodes
+        # An unapproved gate has not actually executed — it's pending.
+        # Pending nodes don't go in executed_nodes (they go in
+        # pending_node when the engine pauses).
+        assert "gate" not in result.executed_nodes
         assert "final" not in result.executed_nodes
 
     async def test_passes_through_approved_gate(self, engine: AsyncWorkflowEngine):
@@ -157,6 +160,104 @@ class TestApprovalNode:
             approved_nodes={"gate"},
         )
         assert result.context["gate_status"] == "approved"
+
+    async def test_approved_gate_caches_for_resume(self, engine: AsyncWorkflowEngine):
+        """Once approved, the gate should be cached so a subsequent
+        resume replays from cache without re-emitting events or
+        re-applying auto_set side effects (Non-Negotiable #3)."""
+        first = await engine.execute(
+            WorkflowInput(module_name="approval_test", context={}),
+            approved_nodes={"gate"},
+        )
+        cache = first.context["__node_outputs"]
+        assert "gate" in cache
+        assert cache["gate"]["gate_status"] == "approved"
+
+        # Resume with the cached context. The gate should replay from
+        # cache, not re-execute.
+        second = await engine.execute(
+            WorkflowInput(module_name="approval_test", context=first.context),
+            approved_nodes={"gate"},
+        )
+        assert "gate" in second.executed_nodes
+        # Cache value is preserved across resume.
+        assert second.context["__node_outputs"]["gate"]["gate_status"] == "approved"
+
+
+# ---------------------------------------------------------------------------
+# HANDOFF node — pause_on_handoff metadata flag
+# ---------------------------------------------------------------------------
+
+
+def _handoff_aop(*, pause: bool) -> AOPDefinition:
+    """Linear: action -> handoff. The handoff's pause_on_handoff
+    metadata controls whether the engine pauses or continues."""
+    return AOPDefinition(
+        module_name="handoff_test",
+        nodes=[
+            AOPNode(id="step1", type=NodeType.ACTION),
+            AOPNode(
+                id="hospital",
+                type=NodeType.HANDOFF,
+                metadata={
+                    "label": "Send to hospital",
+                    "params": {"pause_on_handoff": pause},
+                },
+            ),
+        ],
+        edges=[AOPEdge(source="step1", target="hospital")],
+    )
+
+
+class TestHandoffNode:
+    async def test_legacy_handoff_continues_and_completes(self):
+        e = AsyncWorkflowEngine()
+        e.load_aop(_handoff_aop(pause=False))
+        result = await e.execute(
+            WorkflowInput(module_name="handoff_test", context={})
+        )
+        # Default behavior — workflow runs through to the end.
+        assert result.final_outcome.startswith("handoff:")
+        assert "hospital" in result.executed_nodes
+        assert result.pending_node is None
+
+    async def test_pause_on_handoff_breaks_with_awaiting_external(self):
+        e = AsyncWorkflowEngine()
+        e.load_aop(_handoff_aop(pause=True))
+        result = await e.execute(
+            WorkflowInput(module_name="handoff_test", context={})
+        )
+        assert result.final_outcome.startswith("awaiting_external:")
+        # The HANDOFF was visited (cached) but the workflow is paused,
+        # not terminated.
+        assert result.pending_node == "hospital"
+
+    async def test_resume_signal_lets_paused_handoff_advance(self):
+        """When ``__resumed_external`` is set in the context, the
+        HANDOFF runs through without pausing again — that's how
+        ``/resume_external`` advances the workflow past the handoff."""
+        e = AsyncWorkflowEngine()
+        e.load_aop(_handoff_aop(pause=True))
+
+        first = await e.execute(
+            WorkflowInput(module_name="handoff_test", context={})
+        )
+        assert first.final_outcome.startswith("awaiting_external:")
+
+        # Drop the cached HANDOFF output so the engine re-runs it,
+        # and set the resume signal.
+        resumed_context = dict(first.context)
+        cache = dict(resumed_context.get("__node_outputs", {}))
+        cache.pop("hospital", None)
+        resumed_context["__node_outputs"] = cache
+        resumed_context["__resumed_external"] = True
+
+        second = await e.execute(
+            WorkflowInput(module_name="handoff_test", context=resumed_context)
+        )
+        # This time the HANDOFF runs through — outcome is the legacy
+        # handoff: prefix, not awaiting_external.
+        assert second.final_outcome.startswith("handoff:")
 
 
 # ---------------------------------------------------------------------------

@@ -269,8 +269,19 @@ function DAGCanvas({
   const [zoom, setZoom] = useState(1);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
+  const [size, setSize] = useState({ w: 0, h: 0 });
   const dragging = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    const c = containerRef.current;
+    if (!c || typeof ResizeObserver === "undefined") return;
+    const update = () => setSize({ w: c.clientWidth, h: c.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, []);
 
   const onHoverNode = useCallback((id: string, clientX: number, clientY: number) => {
     const c = containerRef.current;
@@ -431,8 +442,8 @@ function DAGCanvas({
         <div
           className="pointer-events-none absolute z-20 max-w-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-lg text-xs"
           style={{
-            left: Math.min(hover.x + 14, (containerRef.current?.clientWidth ?? 0) - 320),
-            top: Math.min(hover.y + 14, (containerRef.current?.clientHeight ?? 0) - 140),
+            left: Math.min(hover.x + 14, size.w - 320),
+            top: Math.min(hover.y + 14, size.h - 140),
           }}
         >
           <div className="flex items-center gap-1.5 mb-1">
@@ -478,18 +489,30 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
   const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     if (!selectedModule) {
       setAop(null);
       setSelectedNode(null);
+      setLoading(false);
+      setError(null);
       return;
     }
-    setLoading(true);
-    setError(null);
-    setSelectedNode(null);
-    fetchModule(selectedModule)
-      .then(setAop)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    (async () => {
+      setLoading(true);
+      setError(null);
+      setSelectedNode(null);
+      try {
+        const result = await fetchModule(selectedModule);
+        if (!cancelled) setAop(result);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedModule]);
 
   useEffect(() => {

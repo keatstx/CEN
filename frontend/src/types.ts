@@ -35,12 +35,20 @@ export interface WorkflowResult {
   pending_input_fields?: InputField[] | null;
 }
 
+export type SessionStatus =
+  | "ACTIVE"
+  | "AWAITING_APPROVAL"
+  | "AWAITING_INPUT"
+  | "AWAITING_EXTERNAL"
+  | "COMPLETED"
+  | "FAILED";
+
 export interface Session {
   id: string;
   module_name: string;
   module_version: string;
   name: string;
-  status: "ACTIVE" | "AWAITING_APPROVAL" | "AWAITING_INPUT" | "COMPLETED" | "FAILED";
+  status: SessionStatus;
   context: Record<string, unknown>;
   executed_nodes: string[];
   pending_node: string | null;
@@ -49,8 +57,42 @@ export interface Session {
   owner_id: string | null;
   project_id: string | null;
   version: number;
+  due_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ─── Navigator Dashboard ─────────────────────────────────────────
+
+export interface QueueCase {
+  id: string;
+
+  name: string;
+  module_name: string;
+  status: SessionStatus;
+  pending_node: string | null;
+  due_at: string | null;
+  last_activity_at: string;
+  is_overdue: boolean;
+  is_due_soon: boolean;
+  days_idle: number;
+}
+
+export interface QueueMetrics {
+  opened_today: number;
+  approvals_today: number;
+  completed_today: number;
+  open_cases: number;
+}
+
+export interface BucketedQueue {
+  needs_attention: QueueCase[];
+  waiting_external: QueueCase[];
+  in_progress: QueueCase[];
+  idle: QueueCase[];
+  done_today: QueueCase[];
+  failed: QueueCase[];
+  metrics: QueueMetrics;
 }
 
 export interface Project {
@@ -74,9 +116,22 @@ export interface LLMGenerateResponse {
 
 // --- AOP graph types (mirrors backend models) ---
 
+export interface SourceRef {
+  sop_id: string;
+  section: string;
+  page: number | null;
+  excerpt: string;
+}
+
 export interface AOPNodeMetadata {
   label: string;
   description: string;
+  actor: string | null;
+  trigger: string | null;
+  output: string | null;
+  timeline: string | null;
+  parallel: boolean;
+  source_ref: SourceRef | null;
   params: Record<string, unknown>;
 }
 
@@ -101,8 +156,40 @@ export interface AOPDefinition {
   module_name: string;
   version: string;
   description: string;
+  source_doc: string | null;
   nodes: AOPNode[];
   edges: AOPEdge[];
+}
+
+// --- SOP ingestion ---
+
+export interface ValidationIssue {
+  severity: "error" | "warning" | "info";
+  node_id: string | null;
+  message: string;
+}
+
+export interface SOPRecord {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  storage_key: string;
+  status: "uploaded" | "parsed" | "extracted" | "promoted" | "failed";
+  canonical_md: string | null;
+  draft_module: AOPDefinition | null;
+  validation_issues: ValidationIssue[];
+  promoted_module_name: string | null;
+  promoted_module_version: string | null;
+  owner_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExtractResponse {
+  sop: SOPRecord;
+  draft: AOPDefinition;
+  validation_issues: ValidationIssue[];
 }
 
 // --- Module field configuration ---

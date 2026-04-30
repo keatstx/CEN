@@ -180,7 +180,10 @@ class TestApprovalFlow:
         assert resp.status_code == 200
         data = resp.json()
         assert data["final_outcome"].startswith("pending_approval:")
-        assert "hipaa_consent" in data["executed_nodes"]
+        # The gate is *pending*, not executed — it shows up as
+        # pending_node and the session status, not in executed_nodes.
+        assert data["pending_node"] == "hipaa_consent"
+        assert "hipaa_consent" not in data["executed_nodes"]
 
         # Verify session is AWAITING_APPROVAL on the first gate
         session_resp = await client.get(f"/sessions/{sid}")
@@ -264,11 +267,14 @@ class TestAuditTrail:
         )
         executed_nodes = exec_resp.json()["executed_nodes"]
 
-        # Audit trail should have one entry per executed node
+        # Audit trail records every node visit (including pending
+        # APPROVALs) — executed_nodes only contains completed ones.
+        # Every executed node must have an audit entry; the audit may
+        # additionally have entries for nodes that paused.
         resp = await client.get(f"/sessions/{sid}/audit")
         audit_entries = resp.json()
         audit_node_ids = [e["node_id"] for e in audit_entries]
-        assert audit_node_ids == executed_nodes
+        assert set(executed_nodes).issubset(set(audit_node_ids))
 
     async def test_audit_nonexistent_session_returns_404(self, client: AsyncClient):
         resp = await client.get("/sessions/does_not_exist/audit")

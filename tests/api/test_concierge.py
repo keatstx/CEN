@@ -88,7 +88,7 @@ class TestConciergeAsk:
         assert resp.status_code == 200
         data = resp.json()
         assert "deductible" in data["answer"].lower()
-        assert data["mode"] == "lookup"
+        assert data["mode"] == "synthesis"
         assert len(data["citations"]) >= 1
         assert data["citations"][0]["score"] > 0
 

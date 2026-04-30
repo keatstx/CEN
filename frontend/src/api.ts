@@ -1,8 +1,11 @@
 import type {
   AOPDefinition,
+  BucketedQueue,
+  ExtractResponse,
   Project,
   ReadyResponse,
   Session,
+  SOPRecord,
   WorkflowInput,
   WorkflowResult,
   LLMGenerateRequest,
@@ -74,13 +77,27 @@ export function listCases(filters?: {
   return request<Session[]>(`/cases${qs ? `?${qs}` : ""}`);
 }
 
+export function fetchQueue(): Promise<BucketedQueue> {
+  return request<BucketedQueue>("/cases/queue");
+}
+
 export function patchCase(
   id: string,
-  body: { name?: string; context?: Record<string, unknown> },
+  body: {
+    name?: string;
+    context?: Record<string, unknown>;
+    due_at?: string | null;
+  },
 ): Promise<Session> {
   return request<Session>(`/cases/${id}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+export function resumeExternalCase(id: string): Promise<WorkflowResult> {
+  return request<WorkflowResult>(`/cases/${id}/resume_external`, {
+    method: "POST",
   });
 }
 
@@ -147,15 +164,38 @@ export function approveSession(id: string): Promise<WorkflowResult> {
 // ── Concierge ──
 
 export interface ConciergeCitation {
-  faq_id: string;
+  faq_id: string | null;
+  kind: "faq" | "workflow" | "sop" | "case_context";
   question: string;
   score: number;
+  node_id: string | null;
+  sop_id: string | null;
 }
 
 export interface ConciergeResponse {
   answer: string;
-  mode: "lookup" | "format" | "guardrail";
+  mode: "synthesis" | "lookup" | "guardrail" | "no_match";
   citations: ConciergeCitation[];
+  suggested_inputs: SuggestedInput[];
+}
+
+export interface SuggestedInput {
+  key: string;
+  value: unknown;
+  confidence: number;
+  evidence: string;
+  source: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  case_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  citations: ConciergeCitation[];
+  mode: string;
+  owner_id: string | null;
+  created_at: string;
 }
 
 export interface FAQ {
@@ -172,11 +212,37 @@ export interface FAQ {
 export function askConcierge(
   question: string,
   caseId?: string,
+  currentNodeId?: string,
 ): Promise<ConciergeResponse> {
   return request<ConciergeResponse>("/concierge/ask", {
     method: "POST",
-    body: JSON.stringify({ question, case_id: caseId }),
+    body: JSON.stringify({
+      question,
+      case_id: caseId,
+      current_node_id: currentNodeId ?? null,
+    }),
   });
+}
+
+export function fetchChatHistory(caseId: string): Promise<ChatMessage[]> {
+  return request<ChatMessage[]>(`/concierge/history/${caseId}`);
+}
+
+export function fetchSuggestions(caseId: string): Promise<SuggestedInput[]> {
+  return request<SuggestedInput[]>(`/concierge/suggestions/${caseId}`);
+}
+
+export async function importFAQLibrary(
+  file: File,
+): Promise<{ imported: number; source_filename: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/faqs/import", { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? body.error ?? `Import failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 export function listFAQs(filters?: {
@@ -290,4 +356,47 @@ export function generateLLM(req: LLMGenerateRequest): Promise<LLMGenerateRespons
     method: "POST",
     body: JSON.stringify(req),
   });
+}
+
+// ── SOP ingestion ──
+
+export function listSOPs(): Promise<SOPRecord[]> {
+  return request<SOPRecord[]>("/sop");
+}
+
+export function getSOP(id: string): Promise<SOPRecord> {
+  return request<SOPRecord>(`/sop/${id}`);
+}
+
+export async function uploadSOP(file: File): Promise<SOPRecord> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/sop/upload", { method: "POST", body: form });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? body.error ?? `Upload failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function parseSOP(id: string): Promise<SOPRecord> {
+  return request<SOPRecord>(`/sop/${id}/parse`, { method: "POST" });
+}
+
+export function extractSOP(id: string): Promise<ExtractResponse> {
+  return request<ExtractResponse>(`/sop/${id}/extract`, { method: "POST" });
+}
+
+export function promoteSOP(id: string, moduleName?: string): Promise<SOPRecord> {
+  return request<SOPRecord>(`/sop/${id}/promote`, {
+    method: "POST",
+    body: JSON.stringify({ module_name: moduleName ?? null }),
+  });
+}
+
+export async function deleteSOP(id: string): Promise<void> {
+  const res = await fetch(`/sop/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Delete failed: ${res.status}`);
+  }
 }

@@ -37,9 +37,36 @@ class InputField(BaseModel):
     description: str = ""
 
 
+class SourceRef(BaseModel):
+    """Back-pointer from an AOP node to the SOP it was extracted from.
+
+    Set by the SOP ingestion pipeline so the UI can offer a "see source"
+    affordance and the audit trail records provenance for every
+    auto-generated node. Mirrors Non-Negotiable #6 (provenance on AI
+    output) for the authoring side, not just runtime.
+    """
+
+    sop_id: str
+    section: str = ""           # human label, e.g. "Part I, NODE: PF-01"
+    page: Optional[int] = None
+    excerpt: str = ""           # first ~200 chars of the source paragraph
+
+
 class NodeMetadata(BaseModel):
     label: str = ""
     description: str = ""
+    # SOP-derived fields (all optional, populated by the ingestion
+    # pipeline when a node is extracted from a Standard Operating
+    # Procedure document). Hand-authored modules typically leave them
+    # null. They are display metadata only — they do not change engine
+    # behavior. `parallel` records that the SOP author marked the node
+    # as concurrent-safe; the engine still serializes execution.
+    actor: Optional[str] = None
+    trigger: Optional[str] = None
+    output: Optional[str] = None
+    timeline: Optional[str] = None
+    parallel: bool = False
+    source_ref: Optional[SourceRef] = None
     params: Dict[str, Any] = Field(default_factory=dict)
     input_schema: Optional[List[InputField]] = None
     # auto_set: declarative "after this node finishes, write these
@@ -76,8 +103,39 @@ class AOPDefinition(BaseModel):
     module_name: str
     version: str = "1.0"
     description: str = ""
+    source_doc: Optional[str] = None  # sop_id when extracted from an SOP
     nodes: List[AOPNode]
     edges: List[AOPEdge]
+
+
+class ValidationIssue(BaseModel):
+    severity: str  # "error" | "warning" | "info"
+    node_id: Optional[str] = None
+    message: str
+
+
+class SOPRecord(BaseModel):
+    """An uploaded Standard Operating Procedure document.
+
+    The bytes live in the StorageBackend keyed by `storage_key`; this
+    model is the database row that tracks parsing/extraction state and
+    links the eventual promoted module back to its source.
+    """
+
+    id: str
+    filename: str
+    content_type: str = ""
+    size: int = 0
+    storage_key: str = ""
+    status: str = "uploaded"  # uploaded | parsed | extracted | promoted | failed
+    canonical_md: Optional[str] = None
+    draft_module: Optional[AOPDefinition] = None
+    validation_issues: List[ValidationIssue] = Field(default_factory=list)
+    promoted_module_name: Optional[str] = None
+    promoted_module_version: Optional[str] = None
+    owner_id: Optional[str] = None
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class WorkflowInput(BaseModel):
@@ -149,6 +207,7 @@ class SessionStatus(str, Enum):
     ACTIVE = "ACTIVE"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
     AWAITING_INPUT = "AWAITING_INPUT"
+    AWAITING_EXTERNAL = "AWAITING_EXTERNAL"  # handed off, waiting on a third party
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -167,6 +226,10 @@ class Session(BaseModel):
     owner_id: Optional[str] = None
     project_id: Optional[str] = None
     version: int = 1
+    # ISO datetime when the case is due. Optional; None means no
+    # deadline. Surfaced on the dashboard as is_due_soon / is_overdue
+    # decorations on case cards.
+    due_at: Optional[str] = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -208,15 +271,60 @@ class ConciergeQuery(BaseModel):
 
 
 class ConciergeCitation(BaseModel):
-    faq_id: str
-    question: str
-    score: float
+    """One grounding source used to answer a question.
+
+    `kind` distinguishes where the chunk came from so the UI can render
+    them differently — FAQs link to the FAQ admin, workflow citations
+    link to the step in the DAG, SOP citations open the source SOP.
+    """
+
+    faq_id: Optional[str] = None
+    kind: str = "faq"  # faq | workflow | sop | case_context
+    question: str = ""
+    score: float = 0.0
+    node_id: Optional[str] = None
+    sop_id: Optional[str] = None
+
+
+class SuggestedInput(BaseModel):
+    """A structured value the concierge extracted from chat that the
+    navigator can apply to the current step's form with one tap.
+
+    Suggestions never write to context directly — the UI surfaces them
+    above the form, the navigator clicks "Apply", and the existing
+    `provide_input` route is what actually advances the workflow. That
+    keeps the audit chain unbroken (Non-Negotiable #2).
+    """
+
+    key: str
+    value: Any
+    confidence: float = 0.0  # 0..1, surfaced as a tier in the UI
+    evidence: str = ""       # short excerpt from the chat
+    source: str = "chat"     # chat | sop | case_history (future)
 
 
 class ConciergeResponse(BaseModel):
     answer: str
-    mode: str  # "lookup" or "format"
+    mode: str  # "lookup" | "synthesis" | "guardrail" | "no_match"
     citations: List[ConciergeCitation] = Field(default_factory=list)
+    suggested_inputs: List[SuggestedInput] = Field(default_factory=list)
+
+
+class ChatMessage(BaseModel):
+    """One persisted turn in a case's concierge thread.
+
+    Append-only — the chat history is part of the audit trail. Updates
+    happen via redaction, never row deletion.
+    """
+
+    id: str
+    case_id: str
+    role: str  # "user" | "assistant" | "system"
+    content: str
+    citations: List[ConciergeCitation] = Field(default_factory=list)
+    mode: str = ""
+    owner_id: Optional[str] = None
+    created_at: str = ""
 
 
 class Artifact(BaseModel):
@@ -244,12 +352,14 @@ class SessionCreate(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict)
     name: Optional[str] = None
     project_id: Optional[str] = None
+    due_at: Optional[str] = None
 
 
 class SessionUpdate(BaseModel):
     context: Optional[Dict[str, Any]] = None
     status: Optional[SessionStatus] = None
     name: Optional[str] = None
+    due_at: Optional[str] = None
     expected_version: Optional[int] = None
 
 

@@ -1,5 +1,7 @@
 import type { Project, Session } from "../types";
 import { MODULE_CONFIGS } from "../types";
+import { STATUS_COLOR, STATUS_LABEL } from "../lib/status";
+import { relativeTime } from "../lib/time";
 
 interface Props {
   projects: Project[];
@@ -17,33 +19,6 @@ interface Props {
   onNewCase: () => void;
   onDeleteCase: (id: string) => void;
   loading: boolean;
-}
-
-const STATUS_LABEL: Record<Session["status"], string> = {
-  ACTIVE: "In progress",
-  AWAITING_INPUT: "Needs your input",
-  AWAITING_APPROVAL: "Awaiting review",
-  COMPLETED: "Done",
-  FAILED: "Stopped",
-};
-
-const STATUS_COLOR: Record<Session["status"], string> = {
-  ACTIVE: "var(--color-blue)",
-  AWAITING_INPUT: "var(--color-warning)",
-  AWAITING_APPROVAL: "var(--color-warning)",
-  COMPLETED: "var(--color-success)",
-  FAILED: "var(--color-danger)",
-};
-
-function relativeTime(iso: string): string {
-  if (!iso) return "";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return iso;
-  const diffSec = Math.round((Date.now() - then) / 1000);
-  if (diffSec < 60) return "just now";
-  if (diffSec < 3600) return `${Math.round(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.round(diffSec / 3600)}h ago`;
-  return `${Math.round(diffSec / 86400)}d ago`;
 }
 
 export default function CaseSidebar({

@@ -23,8 +23,10 @@ class TestExecuteEndpoint:
         data = resp.json()
         assert data["module_name"] == "charity_care_navigator"
         assert "intake_start" in data["executed_nodes"]
-        # v2 halts at the first APPROVAL gate (hipaa_consent)
-        assert "hipaa_consent" in data["executed_nodes"]
+        # v2 halts at the first APPROVAL gate (hipaa_consent). The gate
+        # is *pending*, not executed — it shows up as pending_node.
+        assert data["pending_node"] == "hipaa_consent"
+        assert "hipaa_consent" not in data["executed_nodes"]
         assert data["final_outcome"].startswith("pending_approval:")
 
     async def test_execute_missing_module(self, client: AsyncClient):

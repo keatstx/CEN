@@ -134,6 +134,66 @@ class AuditStore:
             rows = await cursor.fetchall()
         return [self._row_to_entry(row) for row in rows]
 
+    async def get_latest_event_at_for_cases(
+        self, case_ids: list[str]
+    ) -> dict[str, str]:
+        """Return ``{session_id: latest_timestamp}`` for the given cases.
+
+        Single grouped query so the dashboard endpoint avoids N+1
+        round-trips. Used to compute "last activity" per case for the
+        idle-bucket logic and the recent-activity ordering. Returns an
+        empty dict when ``case_ids`` is empty.
+        """
+        if not case_ids:
+            return {}
+        assert self._db is not None
+        placeholders = ",".join("?" for _ in case_ids)
+        query = (
+            f"SELECT session_id, MAX(timestamp) AS latest "
+            f"FROM audit_log WHERE session_id IN ({placeholders}) "
+            f"GROUP BY session_id"
+        )
+        async with self._db.execute(query, case_ids) as cursor:
+            rows = await cursor.fetchall()
+        return {row["session_id"]: row["latest"] for row in rows}
+
+    async def count_events(
+        self,
+        *,
+        case_ids: list[str],
+        node_type: Optional[str] = None,
+        outcome: Optional[str] = None,
+        since: Optional[str] = None,
+    ) -> int:
+        """Count audit events matching the filters, scoped to ``case_ids``.
+
+        Used by the dashboard's metrics strip (e.g., "approvals issued
+        today" = count where node_type='APPROVAL' AND outcome='approved'
+        AND timestamp >= start-of-day). Returns 0 when case_ids is
+        empty.
+        """
+        if not case_ids:
+            return 0
+        assert self._db is not None
+        placeholders = ",".join("?" for _ in case_ids)
+        clauses = [f"session_id IN ({placeholders})"]
+        params: list = list(case_ids)
+        if node_type is not None:
+            clauses.append("node_type = ?")
+            params.append(node_type)
+        if outcome is not None:
+            clauses.append("outcome = ?")
+            params.append(outcome)
+        if since is not None:
+            clauses.append("timestamp >= ?")
+            params.append(since)
+        where = " AND ".join(clauses)
+        async with self._db.execute(
+            f"SELECT COUNT(*) AS c FROM audit_log WHERE {where}", params
+        ) as cursor:
+            row = await cursor.fetchone()
+        return int(row["c"]) if row else 0
+
     async def query(
         self,
         session_id: Optional[str] = None,

@@ -7,11 +7,13 @@ import {
   createProject,
   deleteCase,
   executeWorkflow,
+  fetchSuggestions,
   getCase,
   listCases,
   listProjects,
   provideInput,
   rewindCase,
+  type SuggestedInput,
 } from "../api";
 import type { Project, Session } from "../types";
 import CaseSidebar from "./CaseSidebar";
@@ -23,6 +25,10 @@ import Stepper from "./Stepper";
 
 interface Props {
   modules: string[];
+  /** When set (e.g. from a Dashboard click), the Executor opens with
+   * this case pre-selected. The existing effect at lines below picks
+   * up `selectedCaseId` and hydrates `activeCase` from the API. */
+  initialCaseId?: string | null;
 }
 
 /**
@@ -38,7 +44,7 @@ interface Props {
  *      from cached node outputs (no duplicate side effects).
  *   6. Repeat until COMPLETED.
  */
-export default function Executor({ modules }: Props) {
+export default function Executor({ modules, initialCaseId }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState("");
@@ -47,6 +53,37 @@ export default function Executor({ modules }: Props) {
   const [activeCase, setActiveCase] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestedInput[]>([]);
+
+  // When the user clicks a case on the Dashboard, App passes the id
+  // through `initialCaseId`. The case-loader effect downstream picks
+  // it up via selectedCaseId.
+  useEffect(() => {
+    if (initialCaseId) {
+      setSelectedCaseId(initialCaseId);
+    }
+  }, [initialCaseId]);
+
+  // Refresh suggestions when the active case changes (or when the
+  // concierge bubbles up new ones via onSuggestionsUpdate).
+  const activeCaseId = activeCase?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeCaseId) {
+      setSuggestions([]);
+      return;
+    }
+    fetchSuggestions(activeCaseId)
+      .then((s) => {
+        if (!cancelled) setSuggestions(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCaseId, activeCase?.pending_node]);
 
   /** Returns true if the error looks like a case 404 (stale id). */
   const isStaleCaseError = (e: unknown): boolean => {
@@ -378,6 +415,10 @@ export default function Executor({ modules }: Props) {
               loading={loading}
               onSubmit={handleProvideInput}
               onApprove={handleApprove}
+              suggestions={suggestions}
+              onSuggestionApplied={(key) =>
+                setSuggestions((prev) => prev.filter((s) => s.key !== key))
+              }
             />
 
             <Documents caseRecord={activeCase} />
@@ -386,7 +427,10 @@ export default function Executor({ modules }: Props) {
       </div>
 
       {/* Right frame */}
-      <Concierge caseRecord={activeCase} />
+      <Concierge
+        caseRecord={activeCase}
+        onSuggestionsUpdate={setSuggestions}
+      />
     </div>
   );
 }

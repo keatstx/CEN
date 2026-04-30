@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from cen.api.dependencies import get_engines, get_llm, get_session_store
-from cen.api.routes.sessions import _save_result_back
+from cen.api.routes.cases import _save_result_back
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.exceptions import CycleDetectedError, ModuleNotFoundError, SessionNotFoundError
 from cen.core.models import AOPDefinition, SessionStatus, WorkflowInput, WorkflowResult

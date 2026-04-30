@@ -23,6 +23,7 @@ _NEW_COLUMNS: list[tuple[str, str]] = [
     ("project_id", "TEXT"),
     ("version", "INTEGER NOT NULL DEFAULT 1"),
     ("pending_input_fields", "TEXT"),  # JSON list of InputField; NULL when not paused
+    ("due_at", "TEXT"),  # ISO datetime; NULL = no deadline
 ]
 
 
@@ -103,6 +104,7 @@ class SessionStore:
         name: str | None = None,
         owner_id: str | None = None,
         project_id: str | None = None,
+        due_at: str | None = None,
     ) -> Session:
         now = datetime.now(timezone.utc).isoformat()
         session = Session(
@@ -116,6 +118,7 @@ class SessionStore:
             owner_id=owner_id,
             project_id=project_id,
             version=1,
+            due_at=due_at,
             created_at=now,
             updated_at=now,
         )
@@ -124,8 +127,9 @@ class SessionStore:
             """
             INSERT INTO sessions (id, module_name, module_version, name, status,
                                   context, executed_nodes, pending_node, approved_nodes,
-                                  owner_id, project_id, version, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  owner_id, project_id, version, due_at,
+                                  created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.id,
@@ -140,6 +144,7 @@ class SessionStore:
                 session.owner_id,
                 session.project_id,
                 session.version,
+                session.due_at,
                 session.created_at,
                 session.updated_at,
             ),
@@ -184,19 +189,21 @@ class SessionStore:
             "name",
             "owner_id",
             "project_id",
+            "due_at",
         }
-        # Note: pending_input_fields and pending_node are also allowed to
-        # be set to None (to clear them on resume). Filter out None for
-        # *other* fields, but keep pending_node/pending_input_fields if
-        # they were explicitly passed.
+        # Note: pending_input_fields, pending_node, and due_at are also
+        # allowed to be set to None (to clear). Filter out None for
+        # *other* fields, but keep these three if they were explicitly
+        # passed.
+        nullable_fields = ("pending_node", "pending_input_fields", "due_at")
         updates: dict[str, Any] = {}
         for k, v in fields.items():
             if k not in allowed:
                 continue
-            if v is None and k not in ("pending_node", "pending_input_fields"):
+            if v is None and k not in nullable_fields:
                 continue
             updates[k] = v
-        if not updates and "pending_node" not in fields and "pending_input_fields" not in fields:
+        if not updates and not any(k in fields for k in nullable_fields):
             return existing
 
         now = datetime.now(timezone.utc).isoformat()
@@ -239,6 +246,7 @@ class SessionStore:
         module_name: str | None = None,
         owner_id: str | None = None,
         project_id: str | None = None,
+        status_in: list[str] | None = None,
         limit: int = 50,
     ) -> list[Session]:
         assert self._db is not None
@@ -253,6 +261,10 @@ class SessionStore:
         if project_id:
             clauses.append("project_id = ?")
             params.append(project_id)
+        if status_in:
+            placeholders = ",".join("?" for _ in status_in)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(status_in)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         params.append(limit)
         query = f"SELECT * FROM sessions {where} ORDER BY updated_at DESC LIMIT ?"
@@ -291,6 +303,7 @@ class SessionStore:
             owner_id=row["owner_id"] if "owner_id" in row.keys() else None,
             project_id=row["project_id"] if "project_id" in row.keys() else None,
             version=row["version"] if "version" in row.keys() else 1,
+            due_at=row["due_at"] if "due_at" in row.keys() else None,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

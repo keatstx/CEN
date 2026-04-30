@@ -1,58 +1,129 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Session } from "../types";
-import { askConcierge, type ConciergeResponse } from "../api";
+import {
+  askConcierge,
+  fetchChatHistory,
+  type ChatMessage,
+  type ConciergeCitation,
+  type ConciergeResponse,
+  type SuggestedInput,
+} from "../api";
 
 interface Props {
   caseRecord: Session | null;
+  onSuggestionsUpdate?: (suggestions: SuggestedInput[]) => void;
 }
 
 interface Turn {
   role: "user" | "assistant";
   text: string;
-  citations?: { question: string; score: number }[];
-  mode?: string;
+  citations: ConciergeCitation[];
+  mode: string;
+  pending?: boolean;
 }
 
 /**
- * Right-frame AI Concierge. Calls /concierge/ask which retrieves
- * matching FAQs from the project's knowledge base and returns the
- * top match (lookup mode) or a formatted synthesis (format mode —
- * lands when Gemini is wired in a follow-up).
+ * Right-frame AI Concierge — conversational thread persisted to the
+ * server. On case open, loads the prior history; every send + reply
+ * is appended to chat_messages so the conversation survives refresh.
  *
- * Conversation history is component-state-only in v1 (lost on refresh).
- * Per-turn persistence to a chat_messages table is a v2 item.
+ * The assistant grounds against three sources (FAQs, current workflow
+ * step, prior turns) and surfaces citations with a kind tag so the UI
+ * can label them as "FAQ", "Step", etc.
  */
-export default function Concierge({ caseRecord }: Props) {
+export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+
+  // Load persisted history when the case changes.
+  const caseId = caseRecord?.id ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!caseId) {
+      setTurns([]);
+      return;
+    }
+    setHistoryLoading(true);
+    setError(null);
+    fetchChatHistory(caseId)
+      .then((messages: ChatMessage[]) => {
+        if (cancelled) return;
+        setTurns(
+          messages
+            .filter((m) => m.role === "user" || m.role === "assistant")
+            .map((m) => ({
+              role: m.role as "user" | "assistant",
+              text: m.content,
+              citations: m.citations,
+              mode: m.mode,
+            })),
+        );
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
+
+  // Auto-scroll to bottom on new turn.
+  useEffect(() => {
+    threadRef.current?.scrollTo({
+      top: threadRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [turns.length]);
 
   const send = async () => {
     const question = draft.trim();
     if (!question || busy) return;
     setDraft("");
     setError(null);
-    setTurns((prev) => [...prev, { role: "user", text: question }]);
+    // Optimistic append; the server will persist both user + assistant.
+    setTurns((prev) => [
+      ...prev,
+      { role: "user", text: question, citations: [], mode: "" },
+      {
+        role: "assistant",
+        text: "Thinking…",
+        citations: [],
+        mode: "",
+        pending: true,
+      },
+    ]);
     setBusy(true);
     try {
       const resp: ConciergeResponse = await askConcierge(
         question,
         caseRecord?.id,
+        caseRecord?.pending_node ?? undefined,
       );
-      setTurns((prev) => [
-        ...prev,
-        {
+      setTurns((prev) => {
+        const next = prev.slice(0, -1);
+        next.push({
           role: "assistant",
           text: resp.answer,
-          citations: resp.citations.map((c) => ({
-            question: c.question,
-            score: c.score,
-          })),
+          citations: resp.citations,
           mode: resp.mode,
-        },
-      ]);
+        });
+        return next;
+      });
+      // Bubble freshly-extracted suggestions up to the parent so the
+      // StepCard can render them above the form.
+      if (resp.suggested_inputs && onSuggestionsUpdate) {
+        onSuggestionsUpdate(resp.suggested_inputs);
+      }
     } catch (e) {
+      // Drop the pending placeholder on error.
+      setTurns((prev) => prev.slice(0, -1));
       setError(e instanceof Error ? e.message : "Concierge unavailable");
     } finally {
       setBusy(false);
@@ -67,55 +138,28 @@ export default function Concierge({ caseRecord }: Props) {
           style={{ background: "var(--color-blue)" }}
         />
         <h3 className="text-sm font-semibold">AI Concierge</h3>
+        {historyLoading && (
+          <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
+            Loading thread…
+          </span>
+        )}
       </div>
 
       {/* Thread */}
-      <div className="flex-1 overflow-y-auto space-y-3 -mx-1 px-1 mb-3 min-h-[200px]">
-        {turns.length === 0 && (
+      <div
+        ref={threadRef}
+        className="flex-1 overflow-y-auto space-y-3 -mx-1 px-1 mb-3 min-h-[200px]"
+      >
+        {turns.length === 0 && !historyLoading && (
           <p className="text-xs text-[var(--color-text-muted)] italic">
-            Ask any question about this step in plain language. I'll answer
-            using the FAQs your team has uploaded for this project.
+            {caseRecord
+              ? "Hi — ask me anything about this case. I'll pull from your team's FAQs and the current step."
+              : "Open a case and I'll be here to help walk through it."}
           </p>
         )}
         {turns.map((t, i) => (
-          <div key={i}>
-            {t.role === "user" ? (
-              <div className="flex justify-end">
-                <div className="max-w-[90%] bg-[var(--color-bg)] border border-[var(--color-border)] px-3 py-2 rounded-lg text-xs">
-                  {t.text}
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-[95%]">
-                <div className="text-xs whitespace-pre-wrap leading-relaxed text-[var(--color-text-secondary)]">
-                  {t.text}
-                </div>
-                {t.citations && t.citations.length > 0 && (
-                  <div className="mt-1.5 space-y-0.5">
-                    {t.citations.map((c, idx) => (
-                      <div
-                        key={idx}
-                        className="text-[10px] text-[var(--color-text-muted)] truncate"
-                      >
-                        ↳ <span className="italic">{c.question}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {t.mode === "guardrail" && (
-                  <div className="mt-1 text-[10px] text-[var(--color-warning)]">
-                    Out-of-scope question — referred elsewhere
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <ThreadTurn key={i} turn={t} />
         ))}
-        {busy && (
-          <div className="text-xs text-[var(--color-text-muted)] italic">
-            Looking…
-          </div>
-        )}
       </div>
 
       {error && (
@@ -133,13 +177,13 @@ export default function Concierge({ caseRecord }: Props) {
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Ask about this step…"
-          disabled={busy}
+          placeholder={caseRecord ? "Ask about this step…" : "Open a case to chat"}
+          disabled={busy || !caseRecord}
           className="flex-1 text-xs"
         />
         <button
           type="submit"
-          disabled={busy || !draft.trim()}
+          disabled={busy || !draft.trim() || !caseRecord}
           className="btn btn-primary text-xs px-3"
         >
           Ask
@@ -150,6 +194,73 @@ export default function Concierge({ caseRecord }: Props) {
         I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
         I can't give personalized medical, legal, or financial advice.
       </p>
+    </div>
+  );
+}
+
+function ThreadTurn({ turn }: { turn: Turn }) {
+  if (turn.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[90%] bg-[var(--color-bg)] border border-[var(--color-border)] px-3 py-2 rounded-lg text-xs">
+          {turn.text}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-[95%]">
+      <div
+        className={`text-xs whitespace-pre-wrap leading-relaxed ${
+          turn.pending
+            ? "italic text-[var(--color-text-muted)]"
+            : "text-[var(--color-text-secondary)]"
+        }`}
+      >
+        {turn.text}
+      </div>
+      {turn.citations && turn.citations.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {turn.citations.map((c, idx) => (
+            <CitationLine key={idx} citation={c} />
+          ))}
+        </div>
+      )}
+      {turn.mode === "guardrail" && (
+        <div className="mt-1 text-[10px] text-[var(--color-warning)]">
+          Out-of-scope question — referred elsewhere
+        </div>
+      )}
+      {turn.mode === "no_match" && (
+        <div className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+          Tip: your team can add this Q to the FAQ library.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CitationLine({ citation }: { citation: ConciergeCitation }) {
+  const tag =
+    citation.kind === "workflow"
+      ? "Step"
+      : citation.kind === "sop"
+      ? "SOP"
+      : citation.kind === "case_context"
+      ? "Case"
+      : "FAQ";
+  return (
+    <div className="text-[10px] text-[var(--color-text-muted)] truncate">
+      <span
+        className="inline-block px-1 mr-1 rounded text-[9px] font-mono"
+        style={{
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+        }}
+      >
+        {tag}
+      </span>
+      <span className="italic">{citation.question}</span>
     </div>
   );
 }

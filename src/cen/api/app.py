@@ -17,10 +17,12 @@ from cen.core.aop_parser import load_aop_from_file
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.artifact_store import ArtifactStore
 from cen.core.audit_store import AuditStore
+from cen.core.chat_store import ChatMessageStore
 from cen.core.faq_store import FAQStore
 from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
 from cen.llm.factory import create_language_model
+from cen.sop.store import SOPStore
 from cen.storage import LocalDiskStorage
 from cen.privacy.pii_scrubber import create_scrubber
 from cen.telemetry.bus import AsyncEventBus
@@ -29,7 +31,7 @@ from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
 from cen.api.routes import artifacts, auth, concierge, health, llm, modules, workflows
-from cen.api.routes import projects, sessions
+from cen.api.routes import cases, projects, sop
 
 logger = structlog.get_logger()
 
@@ -95,6 +97,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     audit_store = AuditStore(settings.db_path)
     artifact_store = ArtifactStore(settings.db_path)
     faq_store = FAQStore(settings.db_path)
+    chat_store = ChatMessageStore(settings.db_path)
+    sop_store = SOPStore(settings.db_path)
     storage_backend = LocalDiskStorage(settings.uploads_dir)
 
     @asynccontextmanager
@@ -107,7 +111,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await audit_store.initialize()
         await artifact_store.initialize()
         await faq_store.initialize()
+        await chat_store.initialize()
+        await sop_store.initialize()
         yield
+        await sop_store.close()
+        await chat_store.close()
         await faq_store.close()
         await artifact_store.close()
         await audit_store.close()
@@ -176,8 +184,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         audit_store=audit_store,
         artifact_store=artifact_store,
         faq_store=faq_store,
+        chat_store=chat_store,
+        sop_store=sop_store,
         storage_backend=storage_backend,
         event_bus=event_bus,
+        llm_semaphore=llm_semaphore,
     )
 
     # Routes
@@ -185,14 +196,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(llm.router)
     app.include_router(health.router)
     app.include_router(auth.router)
-    # Mount sessions router twice — /sessions (legacy) and /cases
-    # (canonical, per CLAUDE.md §7). Same handlers, same store.
-    app.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-    app.include_router(sessions.router, prefix="/cases", tags=["cases"])
+    # Mount the cases router twice — /cases (canonical, per CLAUDE.md
+    # §7) and /sessions (legacy alias for backward compatibility).
+    # Same handlers, same store.
+    app.include_router(cases.router, prefix="/cases", tags=["cases"])
+    app.include_router(cases.router, prefix="/sessions", tags=["sessions"])
     app.include_router(projects.router)
     app.include_router(artifacts.router)
     app.include_router(concierge.router)
     app.include_router(modules.router)
+    app.include_router(sop.router)
 
     # Serve frontend static files (production)
     # Check relative path (local dev) then absolute path (Docker)

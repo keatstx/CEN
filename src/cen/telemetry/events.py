@@ -52,3 +52,19 @@ class ApprovalEvent:
     module: str
     node_id: str
     timestamp: str
+
+
+@dataclass(frozen=True)
+class SOPEvent:
+    """Lifecycle event for the SOP ingestion pipeline.
+
+    `stage` is one of: uploaded | parsed | extracted | promoted | failed.
+    Emitted by the SOP routes so audit/telemetry handlers can record
+    provenance for every auto-generated module.
+    """
+
+    sop_id: str
+    stage: str
+    filename: str = ""
+    module_name: str = ""
+    module_version: str = ""

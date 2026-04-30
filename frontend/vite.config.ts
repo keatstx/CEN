@@ -20,6 +20,7 @@ export default defineConfig({
       '/update-aop': 'http://localhost:8000',
       '/tlm': 'http://localhost:8000',
       '/modules': 'http://localhost:8000',
+      '/sop': 'http://localhost:8000',
     },
   },
 })
