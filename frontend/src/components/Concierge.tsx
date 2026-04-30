@@ -25,7 +25,8 @@ interface Turn {
 }
 
 const NO_CASE_OPENER =
-  "Hi — I'm your CEN concierge. Pick a case and I'll help you walk through it.";
+  "Hi — I'm your CEN concierge. Ask me anything — I'll pull from your team's FAQ library. " +
+  "Open a case anytime and I'll add the workflow context too.";
 
 /**
  * Right-frame AI Concierge — conversational thread persisted to the
@@ -196,13 +197,17 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={caseRecord ? "Ask about this step…" : "Open a case to chat"}
-          disabled={busy || !caseRecord}
+          placeholder={
+            caseRecord
+              ? "Ask about this step…"
+              : "Ask anything from your FAQ library…"
+          }
+          disabled={busy}
           className="flex-1 text-xs"
         />
         <Button
           type="submit"
-          disabled={!draft.trim() || !caseRecord}
+          disabled={!draft.trim()}
           loading={busy}
           loadingLabel="Thinking…"
         >
