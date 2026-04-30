@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Session } from "../types";
 import { type SuggestedInput } from "../api";
+import Button from "./ui/Button";
 import SuggestionsPanel from "./SuggestionsPanel";
 import { FieldInput, StepHeader } from "./step_components";
 
@@ -125,13 +126,15 @@ function StepCardBody({
           nodeId={caseRecord.pending_node}
         />
 
-        <button
-          className="btn btn-primary w-full text-sm py-3"
+        <Button
+          size="lg"
+          fullWidth
+          loading={loading}
+          loadingLabel="Submitting your approval…"
           onClick={onApprove}
-          disabled={loading}
         >
-          {loading ? "Working…" : "Looks good — approve and continue →"}
-        </button>
+          Looks good — approve and continue →
+        </Button>
       </div>
     );
   }
@@ -203,13 +206,17 @@ function StepCardBody({
               }
             />
           ))}
-          <button
+          <Button
             type="submit"
-            className="btn btn-primary w-full text-sm py-3 mt-2"
-            disabled={!allRequiredFilled || loading}
+            size="lg"
+            fullWidth
+            disabled={!allRequiredFilled}
+            loading={loading}
+            loadingLabel="Submitting…"
+            className="mt-2"
           >
-            {loading ? "Working…" : "Submit and continue →"}
-          </button>
+            Submit and continue →
+          </Button>
           {!allRequiredFilled && (
             <p className="text-[11px] text-[var(--color-text-muted)] text-center">
               Fill in the required fields to continue.

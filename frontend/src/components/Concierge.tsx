@@ -9,6 +9,7 @@ import {
   type ConciergeResponse,
   type SuggestedInput,
 } from "../api";
+import Button from "./ui/Button";
 
 interface Props {
   caseRecord: Session | null;
@@ -199,13 +200,14 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
           disabled={busy || !caseRecord}
           className="flex-1 text-xs"
         />
-        <button
+        <Button
           type="submit"
-          disabled={busy || !draft.trim() || !caseRecord}
-          className="btn btn-primary text-xs px-3"
+          disabled={!draft.trim() || !caseRecord}
+          loading={busy}
+          loadingLabel="Thinking…"
         >
           Ask
-        </button>
+        </Button>
       </form>
 
       <p className="text-[10px] text-[var(--color-text-muted)] mt-2 italic leading-snug">

@@ -9,6 +9,8 @@ import {
   type DraftEditResponse,
 } from "../api";
 import type { SOPRecord } from "../types";
+import Button from "./ui/Button";
+import Spinner from "./ui/Spinner";
 import ValidationPanel from "./sop/ValidationPanel";
 
 interface Props {
@@ -37,6 +39,11 @@ export default function SOPStudio({ onModulePromoted }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Upload runs three sequential server calls (upload, parse, extract).
+  // Track which stage we're in so the user sees real progress, not
+  // a single "loading" spinner that lasts 5+ seconds with no signal.
+  const [uploadStage, setUploadStage] =
+    useState<"idle" | "uploading" | "parsing" | "extracting">("idle");
 
   useEffect(() => {
     let cancelled = false;
@@ -60,12 +67,12 @@ export default function SOPStudio({ onModulePromoted }: Props) {
   const handleUpload = async (file: File) => {
     setBusy(true);
     setError(null);
+    setUploadStage("uploading");
     try {
       const created = await uploadSOP(file);
-      // Auto-advance through parse + extract so the author lands on the
-      // review pane immediately. Errors here are recoverable (reload
-      // the page, re-run the step from the row).
+      setUploadStage("parsing");
       await parseSOP(created.id);
+      setUploadStage("extracting");
       await extractSOP(created.id);
       setSelectedId(created.id);
       refresh();
@@ -73,6 +80,7 @@ export default function SOPStudio({ onModulePromoted }: Props) {
       setError((err as Error).message);
     } finally {
       setBusy(false);
+      setUploadStage("idle");
     }
   };
 
@@ -134,7 +142,7 @@ export default function SOPStudio({ onModulePromoted }: Props) {
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
       {/* Left — uploader + list */}
       <div className="lg:col-span-2 space-y-6">
-        <UploadCard busy={busy} onUpload={handleUpload} />
+        <UploadCard busy={busy} uploadStage={uploadStage} onUpload={handleUpload} />
         <SOPList
           sops={sops}
           selectedId={selectedId}
@@ -174,12 +182,25 @@ export default function SOPStudio({ onModulePromoted }: Props) {
 
 function UploadCard({
   busy,
+  uploadStage,
   onUpload,
 }: {
   busy: boolean;
+  uploadStage: "idle" | "uploading" | "parsing" | "extracting";
   onUpload: (f: File) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+
+  const stageLabel: Record<typeof uploadStage, string> = {
+    idle: "",
+    uploading: "Uploading…",
+    parsing: "Reading the document…",
+    extracting: "Extracting steps…",
+  };
+
+  const handleFile = (file: File) => {
+    onUpload(file);
+  };
 
   return (
     <div
@@ -188,39 +209,62 @@ function UploadCard({
       }`}
       onDragOver={(e) => {
         e.preventDefault();
-        setDragOver(true);
+        if (!busy) setDragOver(true);
       }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => {
         e.preventDefault();
         setDragOver(false);
+        if (busy) return;
         const file = e.dataTransfer.files[0];
-        if (file) onUpload(file);
+        if (file) handleFile(file);
       }}
     >
       <h3 className="text-sm font-semibold mb-2">Upload an SOP</h3>
       <p className="text-xs text-[var(--color-text-muted)] mb-3">
-        Drop a Markdown (.md) or Word (.docx) file. We'll read it,
-        pull out the steps, and show you a draft workflow you can
-        review before promoting.
+        Drop a Markdown (.md) or Word (.docx) file here, or click the
+        button below. We'll read it, pull out the steps, and show you
+        a draft workflow you can review before promoting.
       </p>
-      <label className="block">
-        <input
-          type="file"
-          accept=".md,.markdown,.docx,.txt,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          disabled={busy}
-          className="text-xs"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file);
-            e.target.value = "";
-          }}
-        />
+
+      {/* The visible button — actually a label that opens the hidden
+          file input. Real button styling, real hover state. */}
+      <label
+        htmlFor="sop-file-input"
+        className="inline-flex items-center justify-center gap-1.5 rounded font-medium transition-colors border text-xs px-3 py-1.5 cursor-pointer"
+        style={{
+          background: busy ? "var(--color-bg)" : "var(--color-accent)",
+          color: busy ? "var(--color-text-muted)" : "white",
+          borderColor: busy ? "var(--color-border)" : "var(--color-accent)",
+          opacity: busy ? 0.6 : 1,
+          cursor: busy ? "not-allowed" : "pointer",
+          pointerEvents: busy ? "none" : "auto",
+        }}
+        aria-disabled={busy}
+      >
+        {busy && <Spinner size={13} />}
+        {busy ? "Working…" : "Choose a file"}
       </label>
-      {busy && (
-        <p className="mt-3 text-xs text-[var(--color-text-muted)]">
-          Reading your SOP — this usually takes a few seconds…
-        </p>
+      <input
+        id="sop-file-input"
+        type="file"
+        accept=".md,.markdown,.docx,.txt,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        disabled={busy}
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Multi-stage progress — the user sees real movement instead
+          of a single spinner that lasts forever. */}
+      {busy && uploadStage !== "idle" && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+          <Spinner size={12} />
+          <span>{stageLabel[uploadStage]}</span>
+        </div>
       )}
     </div>
   );
@@ -334,22 +378,24 @@ function ReviewPane({
           </div>
           <div className="flex gap-2">
             {sop.status === "uploaded" && (
-              <button
-                className="btn-secondary text-xs"
-                disabled={busy}
+              <Button
+                variant="secondary"
+                loading={busy}
+                loadingLabel="Reading…"
                 onClick={onParse}
               >
                 Read this SOP
-              </button>
+              </Button>
             )}
             {(sop.status === "parsed" || sop.status === "extracted") && (
-              <button
-                className="btn-secondary text-xs"
-                disabled={busy}
+              <Button
+                variant="secondary"
+                loading={busy}
+                loadingLabel="Re-extracting…"
                 onClick={onExtract}
               >
                 Re-extract draft
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -393,13 +439,14 @@ function ReviewPane({
                   onChange={(e) => setModuleName(e.target.value)}
                   className="flex-1 px-2 py-1 text-sm border border-[var(--color-border)] rounded"
                 />
-                <button
-                  className="btn-primary text-xs"
-                  disabled={busy || hasBlocker}
+                <Button
+                  loading={busy}
+                  loadingLabel="Promoting…"
+                  disabled={hasBlocker}
                   onClick={() => onPromote(moduleName.trim() || undefined)}
                 >
                   Promote
-                </button>
+                </Button>
               </div>
             </div>
           )}

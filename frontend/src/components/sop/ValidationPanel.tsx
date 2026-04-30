@@ -5,6 +5,7 @@ import {
   type DraftEditResponse,
 } from "../../api";
 import type { ProposedFix, SOPRecord, ValidationIssue } from "../../types";
+import Spinner from "../ui/Spinner";
 
 interface Props {
   sop: SOPRecord;
@@ -25,8 +26,13 @@ interface Props {
  * validator + audit chain stay authoritative.
  */
 export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
-  const [busy, setBusy] = useState(false);
+  // Track which specific action is in flight so the spinner appears on
+  // the right button (not the whole panel) — the user knows exactly
+  // what's processing.
+  const [appliedFixKey, setAppliedFixKey] = useState<string | null>(null);
+  const [autoFixing, setAutoFixing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const busy = appliedFixKey !== null || autoFixing;
 
   const errors = sop.validation_issues.filter((i) => i.severity === "error");
   const warnings = sop.validation_issues.filter((i) => i.severity === "warning");
@@ -34,8 +40,8 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
     i.fixes.some((f) => f.confidence >= 0.9),
   );
 
-  const apply = async (fix: ProposedFix) => {
-    setBusy(true);
+  const apply = async (fix: ProposedFix, key: string) => {
+    setAppliedFixKey(key);
     setError(null);
     try {
       const result = await applySOPFix(sop.id, fix);
@@ -43,12 +49,12 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setAppliedFixKey(null);
     }
   };
 
   const autoFix = async () => {
-    setBusy(true);
+    setAutoFixing(true);
     setError(null);
     try {
       const result = await autoFixSOP(sop.id);
@@ -56,7 +62,7 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setBusy(false);
+      setAutoFixing(false);
     }
   };
 
@@ -84,7 +90,7 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
             type="button"
             onClick={autoFix}
             disabled={busy}
-            className="text-xs px-2 py-1 rounded border hover:bg-[var(--color-bg)]"
+            className="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border hover:bg-[var(--color-bg)] disabled:opacity-60"
             style={{
               color: "var(--color-accent)",
               borderColor:
@@ -92,7 +98,8 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
             }}
             title="Apply every fix with high confidence in one batch"
           >
-            Auto-fix what I can
+            {autoFixing && <Spinner size={11} />}
+            {autoFixing ? "Auto-fixing…" : "Auto-fix what I can"}
           </button>
         )}
       </div>
@@ -110,19 +117,23 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
         {errors.map((issue, idx) => (
           <IssueRow
             key={`e-${idx}`}
+            issueKey={`e-${idx}`}
             issue={issue}
             severity="error"
             onApply={apply}
             busy={busy}
+            appliedFixKey={appliedFixKey}
           />
         ))}
         {warnings.map((issue, idx) => (
           <IssueRow
             key={`w-${idx}`}
+            issueKey={`w-${idx}`}
             issue={issue}
             severity="warning"
             onApply={apply}
             busy={busy}
+            appliedFixKey={appliedFixKey}
           />
         ))}
       </ul>
@@ -132,14 +143,18 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
 
 function IssueRow({
   issue,
+  issueKey,
   severity,
   onApply,
   busy,
+  appliedFixKey,
 }: {
   issue: ValidationIssue;
+  issueKey: string;
   severity: "error" | "warning";
-  onApply: (fix: ProposedFix) => void;
+  onApply: (fix: ProposedFix, key: string) => void;
   busy: boolean;
+  appliedFixKey: string | null;
 }) {
   const color =
     severity === "error" ? "var(--color-error)" : "var(--color-warning, #b45309)";
@@ -154,23 +169,28 @@ function IssueRow({
       </div>
       {issue.fixes.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {issue.fixes.map((fix, i) => (
-            <button
-              key={i}
-              type="button"
-              disabled={busy}
-              onClick={() => onApply(fix)}
-              className="text-[11px] px-2 py-1 rounded border hover:bg-[var(--color-bg)] transition-colors"
-              style={{
-                color: "var(--color-accent)",
-                borderColor:
-                  "color-mix(in srgb, var(--color-accent) 30%, transparent)",
-              }}
-              title={`${fix.label} (confidence ${Math.round(fix.confidence * 100)}%)`}
-            >
-              {fix.label}
-            </button>
-          ))}
+          {issue.fixes.map((fix, i) => {
+            const fixKey = `${issueKey}-${i}`;
+            const thisLoading = appliedFixKey === fixKey;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={busy}
+                onClick={() => onApply(fix, fixKey)}
+                className="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border hover:bg-[var(--color-bg)] transition-colors disabled:opacity-60"
+                style={{
+                  color: "var(--color-accent)",
+                  borderColor:
+                    "color-mix(in srgb, var(--color-accent) 30%, transparent)",
+                }}
+                title={`${fix.label} (confidence ${Math.round(fix.confidence * 100)}%)`}
+              >
+                {thisLoading && <Spinner size={11} />}
+                {thisLoading ? "Applying…" : fix.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </li>
