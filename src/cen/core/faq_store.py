@@ -159,26 +159,36 @@ class FAQStore:
     ) -> list[FAQ]:
         """List FAQs matching the given scope.
 
-        Returns the union of:
-        - FAQs scoped to the given module_name (when provided)
-        - FAQs scoped to the given project_id (when provided)
-        - Global FAQs (module_name IS NULL AND project_id IS NULL)
+        Behavior:
+        - When ``module_name`` or ``project_id`` is provided, returns
+          the union of: FAQs matching that scope + globally-scoped
+          FAQs (module_name IS NULL AND project_id IS NULL).
+        - When BOTH module_name and project_id are None (typical
+          for SOP Studio / Dashboard, where there's no active case),
+          returns every FAQ the owner can see — module-scoped FAQs
+          are still useful to surface, just not filtered to one. The
+          previous behavior of "globals only" returned nothing when
+          the library was use-case-scoped, which made the concierge
+          inert outside the Executor.
+        - ``owner_id`` is the multi-tenant filter (always applied).
         """
         assert self._db is not None
         clauses: list[str] = []
         params: list = []
-        scope: list[str] = ["(module_name IS NULL AND project_id IS NULL)"]
-        if module_name is not None:
-            scope.append("module_name = ?")
-            params.append(module_name)
-        if project_id is not None:
-            scope.append("project_id = ?")
-            params.append(project_id)
-        clauses.append("(" + " OR ".join(scope) + ")")
+        if module_name is not None or project_id is not None:
+            scope: list[str] = ["(module_name IS NULL AND project_id IS NULL)"]
+            if module_name is not None:
+                scope.append("module_name = ?")
+                params.append(module_name)
+            if project_id is not None:
+                scope.append("project_id = ?")
+                params.append(project_id)
+            clauses.append("(" + " OR ".join(scope) + ")")
+        # else: no scope filter — return everything the owner can see.
         if owner_id is not None:
             clauses.append("(owner_id IS NULL OR owner_id = ?)")
             params.append(owner_id)
-        where = " AND ".join(clauses)
+        where = " AND ".join(clauses) if clauses else "1=1"
         query = f"SELECT * FROM faqs WHERE {where} ORDER BY created_at DESC"
         async with self._db.execute(query, params) as cursor:
             rows = await cursor.fetchall()

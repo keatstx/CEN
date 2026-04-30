@@ -18,6 +18,7 @@ from cen.core.engine import AsyncWorkflowEngine
 from cen.core.artifact_store import ArtifactStore
 from cen.core.audit_store import AuditStore
 from cen.core.chat_store import ChatMessageStore
+from cen.core.faq_import import seed_default_faqs_if_empty
 from cen.core.faq_store import FAQStore
 from cen.core.project_store import ProjectStore
 from cen.core.session_store import SessionStore
@@ -111,6 +112,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await audit_store.initialize()
         await artifact_store.initialize()
         await faq_store.initialize()
+        # Auto-seed the bundled FAQ library on first startup so the
+        # concierge has something to ground against. Idempotent —
+        # only runs when the FAQ store is empty (typical after a
+        # Render redeploy that wipes /tmp/cen.db).
+        try:
+            seeded = await seed_default_faqs_if_empty(faq_store)
+            if seeded:
+                logger.info("faq_library_seeded", count=seeded)
+        except Exception:  # noqa: BLE001
+            logger.exception("faq_seed_failed")
         await chat_store.initialize()
         await sop_store.initialize()
         yield

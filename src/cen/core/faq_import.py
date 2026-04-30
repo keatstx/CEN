@@ -250,3 +250,37 @@ async def import_faqs(
             owner_id=owner_id,
         )
     return len(parsed)
+
+
+async def seed_default_faqs_if_empty(faq_store: FAQStore) -> int:
+    """Auto-seed the bundled CEN FAQ Library v2 on first startup.
+
+    The deployed Render config uses ``CEN_DB_PATH=/tmp/cen.db`` which
+    resets on every deploy — without seeding, the FAQ store is empty
+    and the concierge has nothing to ground against. We import as
+    global FAQs (``owner_id=None``) so every operator can see them
+    while still respecting per-module scoping.
+
+    Idempotent: only seeds when the table is empty, so a user who
+    has already imported their own library is never overwritten.
+    Returns the count seeded (0 when skipped).
+    """
+    from pathlib import Path
+
+    existing = await faq_store.list_all()
+    if existing:
+        return 0
+
+    seed_path = (
+        Path(__file__).resolve().parent.parent / "seed" / "faq_library.md"
+    )
+    if not seed_path.exists():
+        return 0
+
+    text = seed_path.read_text(encoding="utf-8")
+    return await import_faqs(
+        text=text,
+        faq_store=faq_store,
+        source_filename="faq_library.md (bundled seed)",
+        owner_id=None,
+    )
