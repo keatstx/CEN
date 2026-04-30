@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from cen.core.chat_store import ChatMessageStore
+from cen.core.concierge_prompt import build_context_block, render_prompt
 from cen.core.faq_store import FAQStore
 from cen.core.models import (
     AOPDefinition,
@@ -140,8 +141,12 @@ def _retrieve_workflow_context(
     current_node_id: Optional[str],
 ) -> List[RetrievedChunk]:
     """Surface the current step (and its description) as a retrieval
-    chunk so the synthesizer can answer "what's next" without a
-    matching FAQ."""
+    chunk so the synthesizer always knows where the navigator is.
+
+    Workflow chunks score at 0.95 so they reliably land in the fused
+    context block even when an FAQ matches strongly — the LLM needs to
+    know the case state to ground its answer.
+    """
     if not case or not aop:
         return []
     chunks: List[RetrievedChunk] = []
@@ -155,11 +160,13 @@ def _retrieve_workflow_context(
             chunks.append(
                 RetrievedChunk(
                     text=text,
-                    score=0.5,  # mid-tier so a strong FAQ match wins
+                    # High score — always include. The LLM needs case
+                    # state to answer "what's next" / "what should I do".
+                    score=0.95,
                     citation=ConciergeCitation(
                         kind="workflow",
                         question=f"Current step — {label}",
-                        score=0.5,
+                        score=0.95,
                         node_id=pending_id,
                     ),
                 )
@@ -169,11 +176,11 @@ def _retrieve_workflow_context(
         chunks.append(
             RetrievedChunk(
                 text=f"Steps already done in this case: {completed}.",
-                score=0.3,
+                score=0.85,
                 citation=ConciergeCitation(
                     kind="workflow",
                     question="Recently completed steps",
-                    score=0.3,
+                    score=0.85,
                 ),
             )
         )
@@ -198,53 +205,94 @@ def _fuse(*chunk_lists: List[RetrievedChunk], top_k: int = 5) -> List[RetrievedC
 # ── Synthesis ────────────────────────────────────────────────────────
 
 
-def _conversational_intro(history: List[ChatMessage]) -> str:
-    """Pick a short opener based on how the conversation is going.
+async def _synthesize_with_llm(
+    *,
+    llm,
+    question: str,
+    chunks: List[RetrievedChunk],
+    history: List[ChatMessage],
+    case: Optional[Session],
+    aop: Optional[AOPDefinition],
+) -> Optional[str]:
+    """LLM-grounded conversational reply.
 
-    Rule-based for the mock/gguf path. The LLM path replaces this with
-    a real generation — but the rule-based fallback keeps the assistant
-    sounding human even with no model attached.
+    Builds the prompt from the case state + retrieved chunks + chat
+    history, calls the configured LLM. Returns None when the LLM
+    isn't configured or the call fails — caller falls back to the
+    rule-based path.
+
+    Per CLAUDE.md non-negotiable #5, the deployment_mode + BAA gate
+    enforces that real PHI never reaches a non-BAA'd provider. That
+    enforcement happens at app startup (``_enforce_deployment_mode``);
+    this function trusts the configured backend.
     """
-    user_turn_count = sum(1 for m in history if m.role == "user")
-    if user_turn_count <= 1:
-        return ""  # first turn — straight to the answer
-    if user_turn_count == 2:
-        return "Sure — "
-    return "Got it. "
+    if llm is None:
+        return None
+    # Skip the LLM path when the backend is mock — the canned response
+    # is meant as a "no LLM" placeholder and would override the
+    # rule-based grounding with unhelpful filler text. Real backends
+    # (gguf, api) flow through.
+    backend = getattr(llm, "backend_name", "")
+    if "mock" in backend.lower():
+        return None
+    chunks_text = [c.text for c in chunks]
+    context_block = build_context_block(
+        case=case, aop=aop, chunks_text=chunks_text, history=history
+    )
+    prompt = render_prompt(context_block=context_block, question=question)
+    try:
+        return (await llm.generate(prompt, max_tokens=320)).strip()
+    except Exception:  # noqa: BLE001
+        # LLM failure is recoverable — caller falls back to the
+        # rule-based path. Don't crash the user's reply.
+        return None
 
 
-def _synthesize_answer(
+def _synthesize_rule_based(
     *,
     question: str,
     chunks: List[RetrievedChunk],
     history: List[ChatMessage],
+    case: Optional[Session],
+    aop: Optional[AOPDefinition],
 ) -> str:
-    """Rule-based conversational reply built from the top chunk.
+    """Rule-based fallback when no LLM is configured.
 
-    The shape is: short conversational intro + the FAQ short answer
-    (or the first paragraph of a workflow chunk) + an offer to expand.
-    Designed to feel like a person, not an FAQ paste.
+    Stitches case context + the top FAQ paragraph + a follow-up offer
+    so the navigator sees something useful even with the mock backend.
+    Not chatty — but at least grounded.
     """
     if not chunks:
         return _NO_MATCH_REPLY
-    top = chunks[0]
-    intro = _conversational_intro(history)
 
-    # FAQ chunks have a short answer on the first line; the body is
-    # multi-paragraph. Take the first non-empty paragraph as the lead.
-    lead = _first_paragraph(top.text)
-    rest_count = max(0, len([p for p in top.text.split("\n\n") if p.strip()]) - 1)
+    user_turn_count = sum(1 for m in history if m.role == "user")
+    intro = "" if user_turn_count <= 1 else (
+        "Sure — " if user_turn_count == 2 else "Got it. "
+    )
+
+    # If we have case state, lead with where the navigator is. This
+    # makes the rule-based answer feel less like a search result.
+    case_prefix = ""
+    if case and case.pending_node and aop:
+        node = next((n for n in aop.nodes if n.id == case.pending_node), None)
+        if node and node.metadata.label:
+            case_prefix = (
+                f"You're on \"{node.metadata.label}\" right now. "
+            )
+
+    # Lead: the first non-empty paragraph of the top FAQ chunk.
+    faq_chunks = [c for c in chunks if c.citation.kind == "faq"]
+    if faq_chunks:
+        lead = _first_paragraph(faq_chunks[0].text)
+    else:
+        lead = _first_paragraph(chunks[0].text)
 
     follow_up = ""
-    if rest_count > 0 and top.citation.kind == "faq":
-        follow_up = " Want me to pull up the full answer or sources?"
+    if len(faq_chunks) > 1:
+        plural = "answer" if len(faq_chunks) - 1 == 1 else "answers"
+        follow_up = f" I also found {len(faq_chunks) - 1} related {plural}."
 
-    other_count = len(chunks) - 1
-    if other_count > 0:
-        plural = "answer" if other_count == 1 else "answers"
-        follow_up += f" I also found {other_count} related {plural} you can ask about."
-
-    return f"{intro}{lead}{follow_up}".strip()
+    return f"{intro}{case_prefix}{lead}{follow_up}".strip()
 
 
 def _first_paragraph(text: str) -> str:
@@ -269,6 +317,7 @@ async def answer_question(
     module_name: Optional[str] = None,
     project_id: Optional[str] = None,
     owner_id: Optional[str] = None,
+    llm: Optional[object] = None,
 ) -> ConciergeResponse:
     """Answer a user question.
 
@@ -326,7 +375,8 @@ async def answer_question(
     # that the workflow is about to ask for.
     suggestions = _extract_suggestions(case=case, history=history)
 
-    # 5) Synthesize.
+    # 5) Synthesize. Prefer the LLM-grounded path; fall back to the
+    # rule-based stitcher when no LLM is configured (or fails).
     if not fused:
         response = ConciergeResponse(
             answer=_NO_MATCH_REPLY, mode="no_match", suggested_inputs=suggestions
@@ -334,11 +384,30 @@ async def answer_question(
         await _persist_assistant(chat_store, case, response, owner_id)
         return response
 
-    answer = _synthesize_answer(question=question, chunks=fused, history=history)
     citations = [c.citation for c in fused]
+    answer = await _synthesize_with_llm(
+        llm=llm,
+        question=question,
+        chunks=fused,
+        history=history,
+        case=case,
+        aop=aop,
+    )
+    if answer:
+        mode = "llm_synthesis"
+    else:
+        answer = _synthesize_rule_based(
+            question=question,
+            chunks=fused,
+            history=history,
+            case=case,
+            aop=aop,
+        )
+        mode = "synthesis"
+
     response = ConciergeResponse(
         answer=answer,
-        mode="synthesis",
+        mode=mode,
         citations=citations,
         suggested_inputs=suggestions,
     )
@@ -359,6 +428,61 @@ def _extract_suggestions(
         return []
     schema: List[InputField] = case.pending_input_fields
     return RegexExtractor().extract(history=history, input_schema=schema)
+
+
+def opener_for_case(
+    *,
+    case: Optional[Session],
+    aop: Optional[AOPDefinition],
+) -> str:
+    """Generate a proactive opening message based on case state.
+
+    Rule-based, no LLM call — runs synchronously when the user opens
+    the panel. Designed to land warm, oriented, and offer the next
+    helpful action so the navigator isn't staring at "ask me anything"
+    cold.
+    """
+    if case is None:
+        return (
+            "Hi — I'm your CEN concierge. Pick a case from the dashboard "
+            "and I'll help you walk through it."
+        )
+
+    pending_label = ""
+    if case.pending_node and aop:
+        node = next((n for n in aop.nodes if n.id == case.pending_node), None)
+        if node is not None:
+            pending_label = node.metadata.label or case.pending_node
+
+    if case.status == "COMPLETED":
+        return (
+            f"This case is wrapped up. Anything you want me to recap "
+            f"from how it went?"
+        )
+    if case.status == "FAILED":
+        return (
+            "This case stopped on an error. Want me to walk through what "
+            "happened or help you decide whether to rewind?"
+        )
+    if case.status == "AWAITING_EXTERNAL":
+        return (
+            f"You've sent this one to a specialist. When the response "
+            f"comes back, click Resume — until then, anything you want "
+            f"to prep?"
+        )
+    if case.status == "AWAITING_APPROVAL" and pending_label:
+        return (
+            f"You're at \"{pending_label}\" — ready to review. Want me "
+            f"to summarize what's been collected so you can sign off?"
+        )
+    if case.status == "AWAITING_INPUT" and pending_label:
+        return (
+            f"You're on \"{pending_label}\". Tell me what you've heard "
+            f"from the patient and I'll help fill in the form."
+        )
+    if pending_label:
+        return f"You're on \"{pending_label}\". What can I help with?"
+    return f"Working on {case.module_name}. What can I help with?"
 
 
 async def _persist_assistant(

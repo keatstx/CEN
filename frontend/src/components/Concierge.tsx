@@ -3,6 +3,7 @@ import type { Session } from "../types";
 import {
   askConcierge,
   fetchChatHistory,
+  fetchConciergeOpener,
   type ChatMessage,
   type ConciergeCitation,
   type ConciergeResponse,
@@ -22,6 +23,9 @@ interface Turn {
   pending?: boolean;
 }
 
+const NO_CASE_OPENER =
+  "Hi — I'm your CEN concierge. Pick a case and I'll help you walk through it.";
+
 /**
  * Right-frame AI Concierge — conversational thread persisted to the
  * server. On case open, loads the prior history; every send + reply
@@ -37,38 +41,44 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [opener, setOpener] = useState<string>(NO_CASE_OPENER);
   const threadRef = useRef<HTMLDivElement>(null);
 
-  // Load persisted history when the case changes.
+  // Load persisted history + opener when the case changes.
   const caseId = caseRecord?.id ?? null;
   useEffect(() => {
     let cancelled = false;
     if (!caseId) {
       setTurns([]);
+      setOpener(NO_CASE_OPENER);
       return;
     }
     setHistoryLoading(true);
     setError(null);
-    fetchChatHistory(caseId)
-      .then((messages: ChatMessage[]) => {
+    (async () => {
+      try {
+        const [messages, openerResp] = await Promise.all([
+          fetchChatHistory(caseId),
+          fetchConciergeOpener(caseId).catch(() => ({ message: "" })),
+        ]);
         if (cancelled) return;
         setTurns(
           messages
-            .filter((m) => m.role === "user" || m.role === "assistant")
-            .map((m) => ({
+            .filter((m: ChatMessage) => m.role === "user" || m.role === "assistant")
+            .map((m: ChatMessage) => ({
               role: m.role as "user" | "assistant",
               text: m.content,
               citations: m.citations,
               mode: m.mode,
             })),
         );
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
+        if (openerResp.message) setOpener(openerResp.message);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
         if (!cancelled) setHistoryLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -150,12 +160,20 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
         ref={threadRef}
         className="flex-1 overflow-y-auto space-y-3 -mx-1 px-1 mb-3 min-h-[200px]"
       >
-        {turns.length === 0 && !historyLoading && (
-          <p className="text-xs text-[var(--color-text-muted)] italic">
-            {caseRecord
-              ? "Hi — ask me anything about this case. I'll pull from your team's FAQs and the current step."
-              : "Open a case and I'll be here to help walk through it."}
-          </p>
+        {/* Proactive opener — landed warm and oriented before the
+            navigator has typed anything. Stays visible at the top
+            even after the conversation starts so context doesn't get
+            lost on long threads. */}
+        {!historyLoading && (
+          <div
+            className="text-xs leading-relaxed pl-3 border-l-2"
+            style={{
+              borderColor: "var(--color-blue)",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            {opener}
+          </div>
         )}
         {turns.map((t, i) => (
           <ThreadTurn key={i} turn={t} />

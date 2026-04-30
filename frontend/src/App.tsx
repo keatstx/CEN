@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import type { ReadyResponse } from "./types";
+import type { ReadyResponse, Session } from "./types";
 import { fetchReady } from "./api";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import Executor from "./components/Executor";
 import DAGViewer from "./components/DAGViewer";
 import SOPStudio from "./components/SOPStudio";
+import Concierge from "./components/Concierge";
 
 type Tab = "dashboard" | "executor" | "dag-viewer" | "sop-studio";
 
@@ -14,8 +15,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [dagSelectedModule, setDagSelectedModule] = useState("");
-  // Lifted state — Dashboard sets, Executor consumes. When the user
-  // clicks a card on the Dashboard, we switch tabs and pre-select.
+  // The case the navigator is currently focused on. Held at App
+  // level so the persistent Concierge in the right rail can read it
+  // regardless of which tab is active. Executor pushes its
+  // internal activeCase up via the onActiveCaseChange callback.
+  const [activeCase, setActiveCase] = useState<Session | null>(null);
+  // When the user clicks a card on the Dashboard, App passes this id
+  // to Executor and switches tabs. Executor hydrates the case and
+  // pushes the result back up via onActiveCaseChange.
   const [executorPreselect, setExecutorPreselect] = useState<string | null>(null);
   // Bumped each time the user (re-)opens the Dashboard tab so the
   // queue refetches with the latest state.
@@ -50,8 +57,15 @@ export default function App() {
     setActiveTab("executor");
   };
 
+  // The persistent right-rail concierge — same instance across every
+  // tab. Reads activeCase from App-level state so it follows the
+  // navigator wherever they go.
+  const rightRail = (
+    <Concierge caseRecord={activeCase} />
+  );
+
   return (
-    <Layout ready={ready} error={error}>
+    <Layout ready={ready} error={error} rightRail={rightRail}>
       {/* Tab bar */}
       <div className="flex gap-1 mb-6 border-b border-[var(--color-border)]">
         {tabs.map((t) => (
@@ -80,6 +94,7 @@ export default function App() {
         <Executor
           modules={ready?.modules_loaded ?? []}
           initialCaseId={executorPreselect}
+          onActiveCaseChange={setActiveCase}
         />
       )}
 

@@ -17,7 +17,6 @@ import {
 } from "../api";
 import type { Project, Session } from "../types";
 import CaseSidebar from "./CaseSidebar";
-import Concierge from "./Concierge";
 import Documents from "./Documents";
 import InformationSoFar from "./InformationSoFar";
 import StepCard from "./StepCard";
@@ -29,6 +28,9 @@ interface Props {
    * this case pre-selected. The existing effect at lines below picks
    * up `selectedCaseId` and hydrates `activeCase` from the API. */
   initialCaseId?: string | null;
+  /** Push the Executor's internal activeCase up to App state so the
+   * persistent right-rail Concierge can read it. */
+  onActiveCaseChange?: (caseRecord: Session | null) => void;
 }
 
 /**
@@ -44,7 +46,11 @@ interface Props {
  *      from cached node outputs (no duplicate side effects).
  *   6. Repeat until COMPLETED.
  */
-export default function Executor({ modules, initialCaseId }: Props) {
+export default function Executor({
+  modules,
+  initialCaseId,
+  onActiveCaseChange,
+}: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedModule, setSelectedModule] = useState("");
@@ -63,6 +69,12 @@ export default function Executor({ modules, initialCaseId }: Props) {
       setSelectedCaseId(initialCaseId);
     }
   }, [initialCaseId]);
+
+  // Sync the Executor's internal activeCase up to App state so the
+  // persistent right-rail Concierge can read it.
+  useEffect(() => {
+    onActiveCaseChange?.(activeCase);
+  }, [activeCase, onActiveCaseChange]);
 
   // Refresh suggestions when the active case changes (or when the
   // concierge bubbles up new ones via onSuggestionsUpdate).
@@ -309,8 +321,9 @@ export default function Executor({ modules, initialCaseId }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] gap-6">
-      {/* Left frame */}
+    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+      {/* Left frame — case nav. The right-rail Concierge is rendered
+          at App level so it persists across tab switches. */}
       <CaseSidebar
         projects={projects}
         selectedProjectId={selectedProjectId}
@@ -425,12 +438,6 @@ export default function Executor({ modules, initialCaseId }: Props) {
           </>
         )}
       </div>
-
-      {/* Right frame */}
-      <Concierge
-        caseRecord={activeCase}
-        onSuggestionsUpdate={setSuggestions}
-      />
     </div>
   );
 }

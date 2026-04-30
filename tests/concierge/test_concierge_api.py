@@ -78,7 +78,7 @@ async def test_concierge_ask_without_case_still_works(client, faq_library_bytes)
     body = r.json()
     # Mode is synthesis when grounded, no_match otherwise — both OK
     # for the no-case path; the test asserts the request works at all.
-    assert body["mode"] in {"synthesis", "no_match", "guardrail"}
+    assert body["mode"] in {"synthesis", "llm_synthesis", "no_match", "guardrail"}
 
 
 async def test_concierge_history_unknown_case_returns_404(client):

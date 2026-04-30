@@ -12,10 +12,11 @@ from cen.api.dependencies import (
     get_current_user,
     get_engines,
     get_faq_store,
+    get_llm,
     get_session_store,
 )
 from cen.core.chat_store import ChatMessageStore
-from cen.core.concierge import answer_question
+from cen.core.concierge import answer_question, opener_for_case
 from cen.core.exceptions import SessionNotFoundError
 from cen.core.faq_import import import_faqs
 from cen.core.faq_store import FAQStore
@@ -133,11 +134,18 @@ async def ask_concierge(
     chat_store: ChatMessageStore = Depends(get_chat_store),
     case_store: SessionStore = Depends(get_session_store),
     engines: dict = Depends(get_engines),
+    llm=Depends(get_llm),
     user: User = Depends(get_current_user),
 ) -> ConciergeResponse:
     """Answer a question using the FAQ store, the case's workflow
     state, and chat history. The user's question is PII-scrubbed
     before retrieval per CLAUDE.md non-negotiable #1.
+
+    When the LLM backend is configured (anything other than mock),
+    the synthesis path uses it for warm, grounded replies. The
+    backend choice is enforced by the deployment_mode + BAA gate at
+    app startup (Non-Negotiable #5), so this layer trusts whatever's
+    wired.
     """
     scrubbed_question = _scrubber.scrub(body.question)
 
@@ -160,6 +168,7 @@ async def ask_concierge(
         aop=aop,
         current_node_id=body.current_node_id,
         owner_id=user.id,
+        llm=llm,
     )
 
 
@@ -177,6 +186,32 @@ async def get_chat_history(
     if case.owner_id is not None and case.owner_id != user.id:
         raise SessionNotFoundError(case_id)
     return await chat_store.list_for_case(case_id, owner_id=user.id)
+
+
+class OpenerResponse(BaseModel):
+    message: str
+
+
+@router.get(
+    "/concierge/opener/{case_id}", response_model=OpenerResponse
+)
+async def get_concierge_opener(
+    case_id: str,
+    case_store: SessionStore = Depends(get_session_store),
+    engines: dict = Depends(get_engines),
+    user: User = Depends(get_current_user),
+) -> OpenerResponse:
+    """Proactive opening message for the concierge panel — landed
+    warm and oriented when the user opens a case, before they've
+    asked anything. Rule-based; no LLM call."""
+    case = await case_store.get(case_id)
+    if case is None:
+        raise SessionNotFoundError(case_id)
+    if case.owner_id is not None and case.owner_id != user.id:
+        raise SessionNotFoundError(case_id)
+    engine = engines.get(case.module_name)
+    aop = engine._aop if engine is not None else None  # noqa: SLF001
+    return OpenerResponse(message=opener_for_case(case=case, aop=aop))
 
 
 @router.get(

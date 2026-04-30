@@ -228,6 +228,12 @@ export function fetchChatHistory(caseId: string): Promise<ChatMessage[]> {
   return request<ChatMessage[]>(`/concierge/history/${caseId}`);
 }
 
+export function fetchConciergeOpener(
+  caseId: string,
+): Promise<{ message: string }> {
+  return request<{ message: string }>(`/concierge/opener/${caseId}`);
+}
+
 export function fetchSuggestions(caseId: string): Promise<SuggestedInput[]> {
   return request<SuggestedInput[]>(`/concierge/suggestions/${caseId}`);
 }
