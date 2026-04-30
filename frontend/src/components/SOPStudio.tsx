@@ -11,6 +11,7 @@ import {
 import type { SOPRecord } from "../types";
 import Button from "./ui/Button";
 import Spinner from "./ui/Spinner";
+import DraftDAG from "./sop/DraftDAG";
 import ValidationPanel from "./sop/ValidationPanel";
 
 interface Props {
@@ -360,6 +361,10 @@ function ReviewPane({
   onDraftUpdated: (updated: DraftEditResponse) => void;
 }) {
   const [moduleName, setModuleName] = useState("");
+  // Selection shared between the DAG canvas and the validation panel —
+  // click a node on the DAG to jump to its issues, click an issue to
+  // highlight its node on the DAG (TODO: wire panel-side highlight).
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const errors = sop.validation_issues.filter((i) => i.severity === "error");
   const hasBlocker = errors.length > 0;
 
@@ -413,7 +418,17 @@ function ReviewPane({
 
       {sop.draft_module && (
         <>
-          <ValidationPanel sop={sop} onDraftUpdated={onDraftUpdated} />
+          <DraftDAG
+            draft={sop.draft_module}
+            issues={sop.validation_issues}
+            selectedNodeId={selectedNodeId}
+            onSelectNode={setSelectedNodeId}
+          />
+          <ValidationPanel
+            sop={sop}
+            onDraftUpdated={onDraftUpdated}
+            highlightNodeId={selectedNodeId}
+          />
           <NodeTable nodes={sop.draft_module.nodes} />
           {sop.status === "extracted" && (
             <div className="card">

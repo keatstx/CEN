@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   applySOPFix,
   autoFixSOP,
@@ -12,6 +12,10 @@ interface Props {
   /** Called after every successful fix application — parent re-fetches
    * the SOP record so the table + issue list re-render. */
   onDraftUpdated: (updated: DraftEditResponse) => void;
+  /** When set (typically because the user clicked a node on the DAG),
+   * the panel scrolls the first matching issue into view and bolds
+   * its border. */
+  highlightNodeId?: string | null;
 }
 
 /**
@@ -25,7 +29,25 @@ interface Props {
  * is only the UI — every change goes through the server so the
  * validator + audit chain stay authoritative.
  */
-export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
+export default function ValidationPanel({
+  sop,
+  onDraftUpdated,
+  highlightNodeId,
+}: Props) {
+  const highlightRef = useRef<HTMLLIElement | null>(null);
+
+  // When the DAG node selection changes, scroll the matching issue
+  // into view (the first one — issues for the same node group
+  // visually).
+  useEffect(() => {
+    if (highlightNodeId && highlightRef.current) {
+      highlightRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [highlightNodeId]);
+
   // Track which specific action is in flight so the spinner appears on
   // the right button (not the whole panel) — the user knows exactly
   // what's processing.
@@ -114,28 +136,40 @@ export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
       )}
 
       <ul className="space-y-2">
-        {errors.map((issue, idx) => (
-          <IssueRow
-            key={`e-${idx}`}
-            issueKey={`e-${idx}`}
-            issue={issue}
-            severity="error"
-            onApply={apply}
-            busy={busy}
-            appliedFixKey={appliedFixKey}
-          />
-        ))}
-        {warnings.map((issue, idx) => (
-          <IssueRow
-            key={`w-${idx}`}
-            issueKey={`w-${idx}`}
-            issue={issue}
-            severity="warning"
-            onApply={apply}
-            busy={busy}
-            appliedFixKey={appliedFixKey}
-          />
-        ))}
+        {errors.map((issue, idx) => {
+          const isHighlight =
+            !!highlightNodeId && issue.node_id === highlightNodeId;
+          return (
+            <IssueRow
+              key={`e-${idx}`}
+              issueKey={`e-${idx}`}
+              issue={issue}
+              severity="error"
+              onApply={apply}
+              busy={busy}
+              appliedFixKey={appliedFixKey}
+              highlight={isHighlight}
+              rowRef={isHighlight ? highlightRef : undefined}
+            />
+          );
+        })}
+        {warnings.map((issue, idx) => {
+          const isHighlight =
+            !!highlightNodeId && issue.node_id === highlightNodeId;
+          return (
+            <IssueRow
+              key={`w-${idx}`}
+              issueKey={`w-${idx}`}
+              issue={issue}
+              severity="warning"
+              onApply={apply}
+              busy={busy}
+              appliedFixKey={appliedFixKey}
+              highlight={isHighlight}
+              rowRef={isHighlight ? highlightRef : undefined}
+            />
+          );
+        })}
       </ul>
     </div>
   );
@@ -148,6 +182,8 @@ function IssueRow({
   onApply,
   busy,
   appliedFixKey,
+  highlight,
+  rowRef,
 }: {
   issue: ValidationIssue;
   issueKey: string;
@@ -155,13 +191,21 @@ function IssueRow({
   onApply: (fix: ProposedFix, key: string) => void;
   busy: boolean;
   appliedFixKey: string | null;
+  highlight: boolean;
+  rowRef?: React.Ref<HTMLLIElement>;
 }) {
   const color =
     severity === "error" ? "var(--color-error)" : "var(--color-warning, #b45309)";
   return (
     <li
-      className="text-xs space-y-1.5 pl-2 border-l-2"
-      style={{ borderColor: color }}
+      ref={rowRef}
+      className={`text-xs space-y-1.5 pl-2 border-l-2 transition-all ${
+        highlight ? "bg-[var(--color-bg)] -mx-3 px-3 py-2 rounded" : ""
+      }`}
+      style={{
+        borderColor: color,
+        borderLeftWidth: highlight ? "4px" : "2px",
+      }}
     >
       <div style={{ color }}>
         {issue.node_id ? <code className="font-mono mr-1">{issue.node_id}</code> : null}
