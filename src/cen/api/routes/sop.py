@@ -34,8 +34,15 @@ from cen.api.dependencies import (
 )
 from cen.config import Settings
 from cen.core.engine import AsyncWorkflowEngine
-from cen.core.models import AOPDefinition, SOPRecord, User, ValidationIssue
+from cen.core.models import (
+    AOPDefinition,
+    ProposedFix,
+    SOPRecord,
+    User,
+    ValidationIssue,
+)
 from cen.sop.extractor import RegexExtractor
+from cen.sop.fixer import annotate_with_fixes, apply_fix
 from cen.sop.parsers import parse_to_markdown
 from cen.sop.promoter import PromotionError, promote_draft
 from cen.sop.store import SOPStore
@@ -221,13 +228,213 @@ async def extract_sop(
         sop_id=sop_id,
         suggested_module_name=suggested,
     )
-    issues = validate_draft(draft)
+    issues = annotate_with_fixes(validate_draft(draft), draft)
     updated = await sop_store.update_extracted(
         sop_id, draft_module=draft, validation_issues=issues
     )
     assert updated is not None
     await _emit(event_bus, sop_id=sop_id, stage="extracted", filename=record.filename)
     return ExtractResponse(sop=updated, draft=draft, validation_issues=issues)
+
+
+class ApplyFixRequest(BaseModel):
+    fix: ProposedFix
+
+
+class DraftEditResponse(BaseModel):
+    """Returned by every editor route — the post-edit draft and its
+    fresh validation issues with new fix proposals attached."""
+
+    sop: SOPRecord
+    draft: AOPDefinition
+    validation_issues: List[ValidationIssue]
+
+
+async def _save_draft_edit(
+    *,
+    sop_id: str,
+    record: SOPRecord,
+    new_draft: AOPDefinition,
+    sop_store: SOPStore,
+) -> DraftEditResponse:
+    """Common tail for editor endpoints — persist the new draft, run
+    the validator + fix proposer, return the updated record."""
+    issues = annotate_with_fixes(validate_draft(new_draft), new_draft)
+    updated = await sop_store.update_extracted(
+        sop_id, draft_module=new_draft, validation_issues=issues
+    )
+    assert updated is not None
+    return DraftEditResponse(sop=updated, draft=new_draft, validation_issues=issues)
+
+
+@router.post("/{sop_id}/apply_fix", response_model=DraftEditResponse)
+async def apply_draft_fix(
+    sop_id: str,
+    body: ApplyFixRequest,
+    sop_store: SOPStore = Depends(get_sop_store),
+    user: User = Depends(get_current_user),
+) -> DraftEditResponse:
+    """Apply a single ProposedFix to the SOP draft and re-validate.
+
+    The frontend's inline fix buttons hit this endpoint with the
+    exact ProposedFix returned in the issue's ``fixes`` list.
+    """
+    record = await sop_store.get(sop_id)
+    if record is None or (record.owner_id and record.owner_id != user.id):
+        raise HTTPException(status_code=404, detail="SOP not found")
+    if record.draft_module is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No draft to fix. Extract the SOP first.",
+        )
+    try:
+        new_draft = apply_fix(record.draft_module, body.fix)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return await _save_draft_edit(
+        sop_id=sop_id, record=record, new_draft=new_draft, sop_store=sop_store
+    )
+
+
+class AutoFixResponse(DraftEditResponse):
+    applied_count: int
+
+
+@router.post("/{sop_id}/auto_fix", response_model=AutoFixResponse)
+async def auto_fix_draft(
+    sop_id: str,
+    sop_store: SOPStore = Depends(get_sop_store),
+    user: User = Depends(get_current_user),
+) -> AutoFixResponse:
+    """Apply every high-confidence fix (>= 0.9) in a single batch.
+
+    Useful for the bulk "Auto-fix what you can" button. Iterates
+    until no more high-confidence fixes are proposed (handles cases
+    where one fix unlocks another) or a safety cap of 20 iterations.
+    """
+    record = await sop_store.get(sop_id)
+    if record is None or (record.owner_id and record.owner_id != user.id):
+        raise HTTPException(status_code=404, detail="SOP not found")
+    if record.draft_module is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No draft to auto-fix. Extract the SOP first.",
+        )
+    draft = record.draft_module
+    applied = 0
+    for _ in range(20):
+        issues = annotate_with_fixes(validate_draft(draft), draft)
+        next_fix = None
+        for issue in issues:
+            for fix in issue.fixes:
+                if fix.confidence >= 0.9:
+                    next_fix = fix
+                    break
+            if next_fix:
+                break
+        if next_fix is None:
+            break
+        try:
+            draft = apply_fix(draft, next_fix)
+            applied += 1
+        except ValueError:
+            break
+    response = await _save_draft_edit(
+        sop_id=sop_id, record=record, new_draft=draft, sop_store=sop_store
+    )
+    return AutoFixResponse(
+        sop=response.sop,
+        draft=response.draft,
+        validation_issues=response.validation_issues,
+        applied_count=applied,
+    )
+
+
+class NodePatchRequest(BaseModel):
+    label: Optional[str] = None
+    description: Optional[str] = None
+    type: Optional[str] = None
+    true_next: Optional[str] = None
+    false_next: Optional[str] = None
+    condition_field: Optional[str] = None
+
+
+@router.patch(
+    "/{sop_id}/draft/nodes/{node_id}", response_model=DraftEditResponse
+)
+async def patch_draft_node(
+    sop_id: str,
+    node_id: str,
+    body: NodePatchRequest,
+    sop_store: SOPStore = Depends(get_sop_store),
+    user: User = Depends(get_current_user),
+) -> DraftEditResponse:
+    """Free-form edit of a single node — used by the inline editor
+    when no canned fix matches what the navigator wants to change."""
+    record = await sop_store.get(sop_id)
+    if record is None or (record.owner_id and record.owner_id != user.id):
+        raise HTTPException(status_code=404, detail="SOP not found")
+    if record.draft_module is None:
+        raise HTTPException(
+            status_code=409, detail="No draft. Extract the SOP first."
+        )
+
+    nodes = [n.model_copy(deep=True) for n in record.draft_module.nodes]
+    target = next((n for n in nodes if n.id == node_id), None)
+    if target is None:
+        raise HTTPException(
+            status_code=404, detail=f"Step '{node_id}' not in this draft."
+        )
+    if body.label is not None:
+        target.metadata.label = body.label
+    if body.description is not None:
+        target.metadata.description = body.description
+    if body.type is not None:
+        try:
+            from cen.core.models import NodeType
+
+            target.type = NodeType(body.type)
+        except ValueError:
+            raise HTTPException(status_code=422, detail=f"Unknown step type: {body.type}")
+    if body.true_next is not None:
+        target.true_next = body.true_next or None
+    if body.false_next is not None:
+        target.false_next = body.false_next or None
+    if body.condition_field is not None:
+        target.condition_field = body.condition_field or None
+
+    new_draft = record.draft_module.model_copy(update={"nodes": nodes})
+    return await _save_draft_edit(
+        sop_id=sop_id, record=record, new_draft=new_draft, sop_store=sop_store
+    )
+
+
+@router.delete(
+    "/{sop_id}/draft/nodes/{node_id}", response_model=DraftEditResponse
+)
+async def delete_draft_node(
+    sop_id: str,
+    node_id: str,
+    sop_store: SOPStore = Depends(get_sop_store),
+    user: User = Depends(get_current_user),
+) -> DraftEditResponse:
+    """Remove a node + every edge / branch pointer that references it."""
+    record = await sop_store.get(sop_id)
+    if record is None or (record.owner_id and record.owner_id != user.id):
+        raise HTTPException(status_code=404, detail="SOP not found")
+    if record.draft_module is None:
+        raise HTTPException(
+            status_code=409, detail="No draft. Extract the SOP first."
+        )
+    new_draft = apply_fix(
+        record.draft_module,
+        ProposedFix(
+            kind="delete_node", label="Delete", payload={"node_id": node_id}
+        ),
+    )
+    return await _save_draft_edit(
+        sop_id=sop_id, record=record, new_draft=new_draft, sop_store=sop_store
+    )
 
 
 @router.post("/{sop_id}/promote", response_model=SOPRecord)

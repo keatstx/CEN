@@ -6,8 +6,10 @@ import {
   parseSOP,
   promoteSOP,
   uploadSOP,
+  type DraftEditResponse,
 } from "../api";
-import type { SOPRecord, ValidationIssue } from "../types";
+import type { SOPRecord } from "../types";
+import ValidationPanel from "./sop/ValidationPanel";
 
 interface Props {
   onModulePromoted?: () => void;
@@ -160,6 +162,7 @@ export default function SOPStudio({ onModulePromoted }: Props) {
             onParse={() => handleParse(selected.id)}
             onExtract={() => handleExtract(selected.id)}
             onPromote={(name) => handlePromote(selected.id, name)}
+            onDraftUpdated={() => refresh()}
           />
         )}
       </div>
@@ -303,16 +306,17 @@ function ReviewPane({
   onParse,
   onExtract,
   onPromote,
+  onDraftUpdated,
 }: {
   sop: SOPRecord;
   busy: boolean;
   onParse: () => void;
   onExtract: () => void;
   onPromote: (name?: string) => void;
+  onDraftUpdated: (updated: DraftEditResponse) => void;
 }) {
   const [moduleName, setModuleName] = useState("");
   const errors = sop.validation_issues.filter((i) => i.severity === "error");
-  const warnings = sop.validation_issues.filter((i) => i.severity === "warning");
   const hasBlocker = errors.length > 0;
 
   return (
@@ -363,7 +367,7 @@ function ReviewPane({
 
       {sop.draft_module && (
         <>
-          <ValidationSummary errors={errors} warnings={warnings} />
+          <ValidationPanel sop={sop} onDraftUpdated={onDraftUpdated} />
           <NodeTable nodes={sop.draft_module.nodes} />
           {sop.status === "extracted" && (
             <div className="card">
@@ -412,47 +416,6 @@ function ReviewPane({
           </pre>
         </details>
       )}
-    </div>
-  );
-}
-
-function ValidationSummary({
-  errors,
-  warnings,
-}: {
-  errors: ValidationIssue[];
-  warnings: ValidationIssue[];
-}) {
-  if (errors.length === 0 && warnings.length === 0) {
-    return (
-      <div className="card" style={{ borderColor: "var(--color-success)" }}>
-        <p className="text-sm">
-          ✓ The draft looks clean — no issues found.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="card space-y-2">
-      <h3 className="text-sm font-semibold">
-        Review notes
-        <span className="ml-2 text-xs text-[var(--color-text-muted)] font-normal">
-          {errors.length} {errors.length === 1 ? "issue" : "issues"} to fix,{" "}
-          {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
-        </span>
-      </h3>
-      <ul className="space-y-1 text-xs">
-        {errors.map((i, idx) => (
-          <li key={`e-${idx}`} style={{ color: "var(--color-error)" }}>
-            • {i.node_id ? <code>{i.node_id}</code> : "—"}: {i.message}
-          </li>
-        ))}
-        {warnings.map((i, idx) => (
-          <li key={`w-${idx}`} style={{ color: "var(--color-warning, #b45309)" }}>
-            • {i.node_id ? <code>{i.node_id}</code> : "—"}: {i.message}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

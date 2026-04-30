@@ -1,0 +1,178 @@
+import { useState } from "react";
+import {
+  applySOPFix,
+  autoFixSOP,
+  type DraftEditResponse,
+} from "../../api";
+import type { ProposedFix, SOPRecord, ValidationIssue } from "../../types";
+
+interface Props {
+  sop: SOPRecord;
+  /** Called after every successful fix application — parent re-fetches
+   * the SOP record so the table + issue list re-render. */
+  onDraftUpdated: (updated: DraftEditResponse) => void;
+}
+
+/**
+ * Interactive validation panel: every issue carries 1-3 fix proposals
+ * the navigator can apply with one tap. Errors first, warnings below.
+ * "Auto-fix what you can" applies every confidence-≥-0.9 fix in a
+ * batch.
+ *
+ * The fix engine + apply path lives in the backend
+ * (`src/cen/sop/fixer.py` + `/api/sop/{id}/apply_fix`). This component
+ * is only the UI — every change goes through the server so the
+ * validator + audit chain stay authoritative.
+ */
+export default function ValidationPanel({ sop, onDraftUpdated }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const errors = sop.validation_issues.filter((i) => i.severity === "error");
+  const warnings = sop.validation_issues.filter((i) => i.severity === "warning");
+  const hasAnyHighConfidence = sop.validation_issues.some((i) =>
+    i.fixes.some((f) => f.confidence >= 0.9),
+  );
+
+  const apply = async (fix: ProposedFix) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await applySOPFix(sop.id, fix);
+      onDraftUpdated(result);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const autoFix = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await autoFixSOP(sop.id);
+      onDraftUpdated(result);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (errors.length === 0 && warnings.length === 0) {
+    return (
+      <div className="card" style={{ borderColor: "var(--color-success)" }}>
+        <p className="text-sm">✓ The draft looks clean — no issues found.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">
+          Review notes
+          <span className="ml-2 text-xs text-[var(--color-text-muted)] font-normal">
+            {errors.length} {errors.length === 1 ? "issue" : "issues"} to fix,{" "}
+            {warnings.length}{" "}
+            {warnings.length === 1 ? "warning" : "warnings"}
+          </span>
+        </h3>
+        {hasAnyHighConfidence && (
+          <button
+            type="button"
+            onClick={autoFix}
+            disabled={busy}
+            className="text-xs px-2 py-1 rounded border hover:bg-[var(--color-bg)]"
+            style={{
+              color: "var(--color-accent)",
+              borderColor:
+                "color-mix(in srgb, var(--color-accent) 30%, transparent)",
+            }}
+            title="Apply every fix with high confidence in one batch"
+          >
+            Auto-fix what I can
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <p
+          className="text-[11px]"
+          style={{ color: "var(--color-error)" }}
+        >
+          {error}
+        </p>
+      )}
+
+      <ul className="space-y-2">
+        {errors.map((issue, idx) => (
+          <IssueRow
+            key={`e-${idx}`}
+            issue={issue}
+            severity="error"
+            onApply={apply}
+            busy={busy}
+          />
+        ))}
+        {warnings.map((issue, idx) => (
+          <IssueRow
+            key={`w-${idx}`}
+            issue={issue}
+            severity="warning"
+            onApply={apply}
+            busy={busy}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function IssueRow({
+  issue,
+  severity,
+  onApply,
+  busy,
+}: {
+  issue: ValidationIssue;
+  severity: "error" | "warning";
+  onApply: (fix: ProposedFix) => void;
+  busy: boolean;
+}) {
+  const color =
+    severity === "error" ? "var(--color-error)" : "var(--color-warning, #b45309)";
+  return (
+    <li
+      className="text-xs space-y-1.5 pl-2 border-l-2"
+      style={{ borderColor: color }}
+    >
+      <div style={{ color }}>
+        {issue.node_id ? <code className="font-mono mr-1">{issue.node_id}</code> : null}
+        {issue.message}
+      </div>
+      {issue.fixes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {issue.fixes.map((fix, i) => (
+            <button
+              key={i}
+              type="button"
+              disabled={busy}
+              onClick={() => onApply(fix)}
+              className="text-[11px] px-2 py-1 rounded border hover:bg-[var(--color-bg)] transition-colors"
+              style={{
+                color: "var(--color-accent)",
+                borderColor:
+                  "color-mix(in srgb, var(--color-accent) 30%, transparent)",
+              }}
+              title={`${fix.label} (confidence ${Math.round(fix.confidence * 100)}%)`}
+            >
+              {fix.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}

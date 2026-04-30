@@ -163,10 +163,18 @@ export interface AOPDefinition {
 
 // --- SOP ingestion ---
 
+export interface ProposedFix {
+  kind: string;
+  label: string;
+  payload: Record<string, unknown>;
+  confidence: number;
+}
+
 export interface ValidationIssue {
   severity: "error" | "warning" | "info";
   node_id: string | null;
   message: string;
+  fixes: ProposedFix[];
 }
 
 export interface SOPRecord {

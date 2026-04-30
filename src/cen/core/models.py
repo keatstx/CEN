@@ -108,10 +108,27 @@ class AOPDefinition(BaseModel):
     edges: List[AOPEdge]
 
 
+class ProposedFix(BaseModel):
+    """A concrete fix the SOP Studio can apply with one tap.
+
+    The ``kind`` field selects the apply path; ``payload`` carries the
+    args that path needs. Confidence orders the fixes per issue (the
+    most-likely match shows first) and gates the auto-fix button —
+    only fixes with confidence >= 0.9 get applied in a batch.
+    """
+
+    kind: str  # rename_target | add_node | drop_edge | rename_id |
+               # wire_branch | delete_node | snake_case_id
+    label: str           # human-language description of the fix
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = 0.0
+
+
 class ValidationIssue(BaseModel):
     severity: str  # "error" | "warning" | "info"
     node_id: Optional[str] = None
     message: str
+    fixes: List[ProposedFix] = Field(default_factory=list)
 
 
 class SOPRecord(BaseModel):

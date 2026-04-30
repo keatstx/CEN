@@ -2,10 +2,12 @@ import type {
   AOPDefinition,
   BucketedQueue,
   ExtractResponse,
+  ProposedFix,
   Project,
   ReadyResponse,
   Session,
   SOPRecord,
+  ValidationIssue,
   WorkflowInput,
   WorkflowResult,
   LLMGenerateRequest,
@@ -391,6 +393,68 @@ export function parseSOP(id: string): Promise<SOPRecord> {
 
 export function extractSOP(id: string): Promise<ExtractResponse> {
   return request<ExtractResponse>(`/sop/${id}/extract`, { method: "POST" });
+}
+
+// ── SOP draft editor ──
+
+export interface DraftEditResponse {
+  sop: SOPRecord;
+  draft: AOPDefinition;
+  validation_issues: ValidationIssue[];
+}
+
+export interface AutoFixResponse extends DraftEditResponse {
+  applied_count: number;
+}
+
+export function applySOPFix(
+  sopId: string,
+  fix: ProposedFix,
+): Promise<DraftEditResponse> {
+  return request<DraftEditResponse>(`/sop/${sopId}/apply_fix`, {
+    method: "POST",
+    body: JSON.stringify({ fix }),
+  });
+}
+
+export function autoFixSOP(sopId: string): Promise<AutoFixResponse> {
+  return request<AutoFixResponse>(`/sop/${sopId}/auto_fix`, {
+    method: "POST",
+  });
+}
+
+export function patchSOPNode(
+  sopId: string,
+  nodeId: string,
+  body: {
+    label?: string;
+    description?: string;
+    type?: string;
+    true_next?: string;
+    false_next?: string;
+    condition_field?: string;
+  },
+): Promise<DraftEditResponse> {
+  return request<DraftEditResponse>(`/sop/${sopId}/draft/nodes/${nodeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteSOPNode(
+  sopId: string,
+  nodeId: string,
+): Promise<DraftEditResponse> {
+  const res = await fetch(`/sop/${sopId}/draft/nodes/${nodeId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(
+      errBody.detail ?? errBody.error ?? `Delete failed: ${res.status}`,
+    );
+  }
+  return res.json();
 }
 
 export function promoteSOP(id: string, moduleName?: string): Promise<SOPRecord> {
