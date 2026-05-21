@@ -1,3 +1,8 @@
+# Live URL: https://cen-48pm.onrender.com
+# Render assigns a unique hash suffix (-48pm) to the service name; the
+# raw `cen.onrender.com` host is NOT this service. Smoke-test the URL
+# above after every deploy.
+
 services:
   - type: web
     name: cen

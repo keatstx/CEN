@@ -2,7 +2,7 @@
 
 AI Concierge platform for No Surprises Act compliance and patient financial advocacy. Executes AOP/DAG workflows that guide patients (or navigators acting on their behalf) through charity care, benefits enrollment, insurance appeals, debt cancellation, and community resource navigation. Lightens cognitive load on navigators and produces a defensible audit trail for every outcome.
 
-**Repo**: https://github.com/keatstx/CEN | **Deploy**: Render (single Docker service, FastAPI serves the built frontend)
+**Repo**: https://github.com/keatstx/CEN | **Live**: https://cen-48pm.onrender.com | **Deploy**: Render (single Docker service, FastAPI serves the built frontend)
 
 ---
 
