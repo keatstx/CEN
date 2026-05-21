@@ -29,6 +29,7 @@ from cen.core.models import (
     SuggestedInput,
     User,
 )
+from cen.core.proactive import NextQuestion, proactive_prompt_for_step
 from cen.core.session_store import SessionStore
 from cen.core.suggestions import RegexExtractor
 from cen.privacy.pii_scrubber import create_scrubber
@@ -237,3 +238,67 @@ async def get_suggestions(
     return RegexExtractor().extract(
         history=history, input_schema=case.pending_input_fields
     )
+
+
+@router.get(
+    "/concierge/next_question/{case_id}",
+    response_model=NextQuestion,
+)
+async def get_next_question(
+    case_id: str,
+    case_store: SessionStore = Depends(get_session_store),
+    engines: dict = Depends(get_engines),
+    user: User = Depends(get_current_user),
+) -> NextQuestion:
+    """Return the per-step proactive prompt + step-aware chip set.
+
+    Re-fired by the frontend whenever `pending_node` changes. Composes
+    a friendly single-field prompt (AWAITING_INPUT) or status-aware copy
+    plus the hand-authored `suggested_questions` from the node metadata.
+    """
+    case = await case_store.get(case_id)
+    if case is None:
+        raise SessionNotFoundError(case_id)
+    if case.owner_id is not None and case.owner_id != user.id:
+        raise SessionNotFoundError(case_id)
+    engine = engines.get(case.module_name)
+    aop = engine._aop if engine is not None else None  # noqa: SLF001
+    return proactive_prompt_for_step(case=case, aop=aop)
+
+
+class SuggestedQuestionsResponse(BaseModel):
+    questions: List[str]
+
+
+@router.get(
+    "/concierge/suggested_questions/{case_id}",
+    response_model=SuggestedQuestionsResponse,
+)
+async def get_suggested_questions(
+    case_id: str,
+    case_store: SessionStore = Depends(get_session_store),
+    engines: dict = Depends(get_engines),
+    user: User = Depends(get_current_user),
+) -> SuggestedQuestionsResponse:
+    """Return the hand-authored suggested questions for the case's
+    currently-pending node. Renders as clickable chips above the chat
+    input; refreshes on step change. Empty list when nothing has been
+    authored — the chat still works, the panel just hides."""
+    case = await case_store.get(case_id)
+    if case is None:
+        raise SessionNotFoundError(case_id)
+    if case.owner_id is not None and case.owner_id != user.id:
+        raise SessionNotFoundError(case_id)
+    if not case.pending_node:
+        return SuggestedQuestionsResponse(questions=[])
+    engine = engines.get(case.module_name)
+    if engine is None:
+        return SuggestedQuestionsResponse(questions=[])
+    aop = engine._aop  # noqa: SLF001
+    if aop is None:
+        return SuggestedQuestionsResponse(questions=[])
+    node = next((n for n in aop.nodes if n.id == case.pending_node), None)
+    if node is None:
+        return SuggestedQuestionsResponse(questions=[])
+    questions = node.metadata.suggested_questions or []
+    return SuggestedQuestionsResponse(questions=list(questions))

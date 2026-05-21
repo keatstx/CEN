@@ -40,3 +40,8 @@ class Settings(BaseSettings):
     deployment_mode: Literal["synthetic", "production"] = "synthetic"
     operator_password: str = ""  # empty = auth disabled (dev/test default)
     llm_baa_confirmed: bool = False  # required for `production` mode + `api` backend
+
+    # RBAC stub — comma-separated operator ids that have admin powers
+    # (SOP-to-AOP authoring, etc.). In dev stub mode the single operator
+    # is always admin. Real RBAC replaces this list.
+    admin_operators: List[str] = []

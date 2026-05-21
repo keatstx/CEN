@@ -77,6 +77,12 @@ class NodeMetadata(BaseModel):
     # Applies after first execution of an ACTION and after a successful
     # APPROVAL. Cached on resume so the values persist across re-runs.
     auto_set: Optional[Dict[str, Any]] = None
+    # Suggested questions the chat surfaces as clickable chips when the
+    # case is paused on this node. 3-5 short, question-shaped strings
+    # written for the operator's audience. Refreshes on step change.
+    # Hand-authored in the AOP JSON; null/empty falls back to a generic
+    # "ask me anything about this step" affordance.
+    suggested_questions: Optional[List[str]] = None
 
 
 class AOPNode(BaseModel):
@@ -177,10 +183,17 @@ class User(BaseModel):
     `id` field is what gets stored in `Session.owner_id` and
     `Project.owner_id` so the multi-tenant enforcement hook is in place
     from day one.
+
+    `is_admin` gates privileged surfaces (SOP-to-AOP authoring today).
+    In the dev stub mode it defaults to True so a single-operator setup
+    sees everything; with `CEN_OPERATOR_PASSWORD` set it's True only if
+    the operator id appears in `CEN_ADMIN_OPERATORS`. Real RBAC replaces
+    this gate.
     """
 
     id: str
     name: str = ""
+    is_admin: bool = False
 
 
 class LoginRequest(BaseModel):

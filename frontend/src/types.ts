@@ -4,6 +4,12 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface User {
+  id: string;
+  name: string;
+  is_admin: boolean;
+}
+
 export interface ReadyResponse {
   status: string;
   modules_loaded: string[];
@@ -133,6 +139,7 @@ export interface AOPNodeMetadata {
   parallel: boolean;
   source_ref: SourceRef | null;
   params: Record<string, unknown>;
+  suggested_questions?: string[] | null;
 }
 
 export interface AOPNode {

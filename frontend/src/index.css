@@ -10,20 +10,26 @@
   --color-surface-overlay: #f1f3f5;
   --color-border: #e2e5ea;
   --color-border-hover: #cdd1d8;
-  --color-text-primary: #1a1d23;
-  --color-text-secondary: #5c6370;
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #4a4f5a;
   --color-text-muted: #8e95a2;
-  --color-accent: #5046e5;
-  --color-accent-hover: #4338ca;
-  --color-accent-glow: #5046e530;
+  /* Concitor co-brand — black primary text/headers, orange interactive */
+  --color-primary: #0a0a0a;
+  --color-accent: #ff6b00;
+  --color-accent-hover: #e55a00;
+  --color-accent-glow: rgba(255, 107, 0, 0.20);
   --color-success: #059669;
   --color-success-muted: #05966912;
   --color-warning: #d97706;
   --color-warning-muted: #d9770612;
   --color-danger: #dc2626;
   --color-danger-muted: #dc262612;
+  /* Status conventions kept blue (online/info) for non-branded semantics */
   --color-blue: #2563eb;
   --color-blue-muted: #2563eb12;
+  /* Layout collapse — flipped by useLayoutCollapse */
+  --left-rail-width: 240px;
+  --right-rail-width: 360px;
 }
 
 * {

@@ -12,6 +12,10 @@ interface Props {
   onApprove: () => void;
   suggestions?: SuggestedInput[];
   onSuggestionApplied?: (key: string) => void;
+  /** Pre-fill the form when chat-led collection has captured values
+   * for this step. Lets the "Show all fields" toggle in ChatLedStep
+   * hand off without losing what chat already collected. */
+  initialValues?: Record<string, unknown>;
 }
 
 /**
@@ -46,8 +50,11 @@ function StepCardBody({
   onApprove,
   suggestions = [],
   onSuggestionApplied,
+  initialValues,
 }: Props) {
-  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [values, setValues] = useState<Record<string, unknown>>(
+    () => initialValues ?? {},
+  );
 
   const stepNumber = caseRecord.executed_nodes.length + 1;
 

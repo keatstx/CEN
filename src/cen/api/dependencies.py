@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING, Optional
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 
 from cen.config import Settings
 from cen.core.models import User
@@ -14,7 +14,9 @@ from cen.core.models import User
 # v1 stub operator returned when auth is disabled (operator_password = "").
 # The fixed id ensures all v1 cases share the same owner_id, which keeps
 # the multi-tenant filter path exercised even before real auth lands.
-_DEV_STUB_USER = User(id="default-operator", name="Default Operator")
+# Stub user is admin by default — single-operator dev setups should see
+# every surface, including SOP-to-AOP authoring.
+_DEV_STUB_USER = User(id="default-operator", name="Default Operator", is_admin=True)
 
 if TYPE_CHECKING:
     import asyncio
@@ -174,4 +176,23 @@ def get_current_user(
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return _DEV_STUB_USER
+    # Password-auth path: admin gate driven by CEN_ADMIN_OPERATORS allowlist.
+    # The stub user id is still "default-operator" — when real per-user auth
+    # lands, this list checks the authenticated user's id instead.
+    is_admin = _DEV_STUB_USER.id in settings.admin_operators
+    return User(id=_DEV_STUB_USER.id, name=_DEV_STUB_USER.name, is_admin=is_admin)
+
+
+def require_admin(user: User = Depends(get_current_user)) -> User:
+    """Gate dependency for admin-only routes (SOP-to-AOP authoring, etc.).
+
+    Use as a router-level dependency:
+        router = APIRouter(prefix="/sop", dependencies=[Depends(require_admin)])
+    or per-route. Raises 403 when the current user lacks the admin flag.
+    """
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin only",
+        )
+    return user

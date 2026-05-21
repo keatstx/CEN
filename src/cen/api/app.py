@@ -31,7 +31,7 @@ from cen.telemetry.handlers import AuditHandlers, TelemetryHandlers
 from cen.api.dependencies import init_dependencies
 from cen.api.middleware.error_handler import register_error_handlers
 from cen.api.middleware.request_id import RequestIDMiddleware
-from cen.api.routes import artifacts, auth, concierge, health, llm, modules, workflows
+from cen.api.routes import artifacts, auth, concierge, health, llm, me, modules, workflows
 from cen.api.routes import cases, projects, sop
 
 logger = structlog.get_logger()
@@ -207,6 +207,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(llm.router)
     app.include_router(health.router)
     app.include_router(auth.router)
+    app.include_router(me.router)
     # Mount the cases router twice — /cases (canonical, per CLAUDE.md
     # §7) and /sessions (legacy alias for backward compatibility).
     # Same handlers, same store.

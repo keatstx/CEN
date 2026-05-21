@@ -31,6 +31,7 @@ from cen.api.dependencies import (
     get_settings,
     get_sop_store,
     get_storage_backend,
+    require_admin,
 )
 from cen.config import Settings
 from cen.core.engine import AsyncWorkflowEngine
@@ -52,7 +53,11 @@ from cen.telemetry.bus import AsyncEventBus
 from cen.telemetry.events import SOPEvent
 
 
-router = APIRouter(prefix="/sop", tags=["sop"])
+router = APIRouter(
+    prefix="/sop",
+    tags=["sop"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 # 25 MB cap, matching artifacts. SOPs are typically much smaller.

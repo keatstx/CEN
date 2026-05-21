@@ -7,6 +7,7 @@ import type {
   ReadyResponse,
   Session,
   SOPRecord,
+  User,
   ValidationIssue,
   WorkflowInput,
   WorkflowResult,
@@ -39,6 +40,34 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 
 export function fetchReady(): Promise<ReadyResponse> {
   return request<ReadyResponse>("/ready");
+}
+
+// ── Current user (operator identity + admin flag) ──
+
+export function fetchCurrentUser(): Promise<User> {
+  return request<User>("/me");
+}
+
+// ── Suggested questions for the current step (chip panel above chat) ──
+
+export function fetchSuggestedQuestions(
+  caseId: string,
+): Promise<{ questions: string[] }> {
+  return request<{ questions: string[] }>(
+    `/concierge/suggested_questions/${caseId}`,
+  );
+}
+
+// ── Per-step proactive prompt + chips (chat header for the new step) ──
+
+export interface NextQuestion {
+  field_key: string | null;
+  prompt: string;
+  suggested_questions: string[];
+}
+
+export function fetchNextQuestion(caseId: string): Promise<NextQuestion> {
+  return request<NextQuestion>(`/concierge/next_question/${caseId}`);
 }
 
 // ── Cases (canonical name; /sessions remains as a legacy alias) ──

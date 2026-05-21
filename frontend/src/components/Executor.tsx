@@ -20,6 +20,7 @@ import CaseSidebar from "./CaseSidebar";
 import Documents from "./Documents";
 import InformationSoFar from "./InformationSoFar";
 import StepCard from "./StepCard";
+import ChatLedStep from "./chat/ChatLedStep";
 import Stepper from "./Stepper";
 
 interface Props {
@@ -423,16 +424,29 @@ export default function Executor({
 
             <InformationSoFar caseRecord={activeCase} />
 
-            <StepCard
-              caseRecord={activeCase}
-              loading={loading}
-              onSubmit={handleProvideInput}
-              onApprove={handleApprove}
-              suggestions={suggestions}
-              onSuggestionApplied={(key) =>
-                setSuggestions((prev) => prev.filter((s) => s.key !== key))
-              }
-            />
+            {activeCase.status === "AWAITING_INPUT" ? (
+              <ChatLedStep
+                caseRecord={activeCase}
+                loading={loading}
+                onSubmit={handleProvideInput}
+                onApprove={handleApprove}
+                suggestions={suggestions}
+                onSuggestionApplied={(key) =>
+                  setSuggestions((prev) => prev.filter((s) => s.key !== key))
+                }
+              />
+            ) : (
+              <StepCard
+                caseRecord={activeCase}
+                loading={loading}
+                onSubmit={handleProvideInput}
+                onApprove={handleApprove}
+                suggestions={suggestions}
+                onSuggestionApplied={(key) =>
+                  setSuggestions((prev) => prev.filter((s) => s.key !== key))
+                }
+              />
+            )}
 
             <Documents caseRecord={activeCase} />
           </>

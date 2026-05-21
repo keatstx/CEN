@@ -4,12 +4,14 @@ import {
   askConcierge,
   fetchChatHistory,
   fetchConciergeOpener,
+  fetchNextQuestion,
   type ChatMessage,
   type ConciergeCitation,
   type ConciergeResponse,
   type SuggestedInput,
 } from "../api";
 import Button from "./ui/Button";
+import SuggestedQuestions from "./chat/SuggestedQuestions";
 
 interface Props {
   caseRecord: Session | null;
@@ -44,6 +46,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [opener, setOpener] = useState<string>(NO_CASE_OPENER);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const threadRef = useRef<HTMLDivElement>(null);
 
   // Load persisted history + opener when the case changes.
@@ -94,10 +97,50 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
     });
   }, [turns.length]);
 
-  const send = async () => {
-    const question = draft.trim();
+  // Per-step proactive opener + chip refresh. Fires once per
+  // (caseId, pending_node) combo — `seenProactiveForStep` keeps tab
+  // switches from re-firing the prompt on the same step.
+  const pendingNode = caseRecord?.pending_node ?? null;
+  const seenProactiveForStep = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    if (!caseId || !pendingNode) {
+      setSuggestedQuestions([]);
+      return;
+    }
+    const key = `${caseId}:${pendingNode}`;
+    fetchNextQuestion(caseId)
+      .then((resp) => {
+        if (cancelled) return;
+        setSuggestedQuestions(resp.suggested_questions ?? []);
+        if (
+          resp.prompt &&
+          !seenProactiveForStep.current.has(key) &&
+          !historyLoading
+        ) {
+          seenProactiveForStep.current.add(key);
+          setTurns((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              text: resp.prompt,
+              citations: [],
+              mode: "proactive",
+            },
+          ]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSuggestedQuestions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId, pendingNode, historyLoading]);
+
+  const sendText = async (rawQuestion: string) => {
+    const question = rawQuestion.trim();
     if (!question || busy) return;
-    setDraft("");
     setError(null);
     // Optimistic append; the server will persist both user + assistant.
     setTurns((prev) => [
@@ -142,9 +185,16 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
     }
   };
 
+  const send = async () => {
+    const q = draft.trim();
+    if (!q) return;
+    setDraft("");
+    await sendText(q);
+  };
+
   return (
-    <div className="card flex flex-col sticky top-6 max-h-[calc(100vh-4rem)]">
-      <div className="flex items-center gap-2 mb-3">
+    <div className="h-full flex flex-col">
+      <div className="flex items-center gap-2 px-4 pb-3">
         <span
           className="inline-block w-2.5 h-2.5 rounded-full"
           style={{ background: "var(--color-blue)" }}
@@ -160,7 +210,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
       {/* Thread */}
       <div
         ref={threadRef}
-        className="flex-1 overflow-y-auto space-y-3 -mx-1 px-1 mb-3 min-h-[200px]"
+        className="flex-1 overflow-y-auto space-y-3 px-4 pb-3 min-h-[200px]"
       >
         {/* Proactive opener — landed warm and oriented before the
             navigator has typed anything. Stays visible at the top
@@ -183,11 +233,17 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
       </div>
 
       {error && (
-        <p className="text-[11px] text-[var(--color-danger)] mb-2">{error}</p>
+        <p className="text-[11px] text-[var(--color-danger)] px-4 pb-2">{error}</p>
       )}
 
+      <SuggestedQuestions
+        questions={suggestedQuestions}
+        onAsk={sendText}
+        disabled={busy}
+      />
+
       <form
-        className="flex gap-1.5"
+        className="flex gap-1.5 px-4 pb-2"
         onSubmit={(e) => {
           e.preventDefault();
           send();
@@ -215,7 +271,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
         </Button>
       </form>
 
-      <p className="text-[10px] text-[var(--color-text-muted)] mt-2 italic leading-snug">
+      <p className="text-[10px] text-[var(--color-text-muted)] px-4 pb-3 italic leading-snug">
         I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
         I can't give personalized medical, legal, or financial advice.
       </p>

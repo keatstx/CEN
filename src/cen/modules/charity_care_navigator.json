@@ -30,6 +30,11 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "suggested_questions": [
+          "What name should I use if the bill is in a different one?",
+          "Do we need the patient's ID or insurance card now?",
+          "What if the patient doesn't have a phone?"
         ]
       }
     },
@@ -71,7 +76,13 @@
         "description": "Obtain signed HIPAA authorization and advocacy consent.",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "suggested_questions": [
+          "What does the patient need to sign?",
+          "How long is the HIPAA authorization good for?",
+          "Can the patient revoke consent later?",
+          "Do we need a separate form for advocacy?"
+        ]
       }
     },
     {
@@ -110,7 +121,13 @@
         ],
         "auto_set": {
           "documents_complete": true
-        }
+        },
+        "suggested_questions": [
+          "What documents do we still need?",
+          "Can we move forward without a pay stub?",
+          "What if the patient is self-employed?",
+          "How recent do the documents need to be?"
+        ]
       }
     },
     {
@@ -183,6 +200,12 @@
             "required": true,
             "description": "Patients on Medicaid, SNAP, WIC, TANF, or who are homeless or recently deceased usually qualify for automatic charity care without further proof."
           }
+        ],
+        "suggested_questions": [
+          "What counts as presumptive eligibility?",
+          "Does Medicaid alone qualify the patient?",
+          "What if the patient is on SNAP but not Medicaid?",
+          "How do I prove presumptive status?"
         ]
       },
       "condition_field": "presumptive_eligible",
@@ -205,6 +228,12 @@
             "required": true,
             "description": "Use the household income calculator. Enter 100 for 100% of FPL, 200 for 200%, etc."
           }
+        ],
+        "suggested_questions": [
+          "How do I calculate income as a percent of FPL?",
+          "What income counts toward the household total?",
+          "What's the threshold for full write-off at this hospital?",
+          "Do I include the spouse's income?"
         ]
       },
       "condition_field": "income_fpl_percent",
@@ -368,7 +397,13 @@
       "type": "APPROVAL",
       "metadata": {
         "label": "Appeal Decision",
-        "description": "Navigator decides whether to appeal denial."
+        "description": "Navigator decides whether to appeal denial.",
+        "suggested_questions": [
+          "What's the deadline to file an appeal?",
+          "What new evidence can we add?",
+          "How often do appeals get overturned?",
+          "What happens if we don't appeal?"
+        ]
       }
     },
     {
