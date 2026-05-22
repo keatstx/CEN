@@ -33,8 +33,14 @@ export default function Layout({
   const rightWidth = rightCollapsed ? COLLAPSED_RAIL_WIDTH : "var(--right-rail-width)";
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+    // Viewport-locked outer: the page itself never scrolls. Each grid
+    // column scrolls internally instead — same pattern as Slack/Linear/
+    // VSCode. This is what guarantees the right-rail's sticky form
+    // sits at the bottom of the visible viewport regardless of how
+    // tall the center content gets. `h-dvh` (dynamic viewport height)
+    // beats `h-screen` on mobile where the browser chrome shifts.
+    <div className="h-dvh flex flex-col overflow-hidden">
+      <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <ConcitorMark />
@@ -53,28 +59,33 @@ export default function Layout({
         </div>
       </header>
 
-      <StatusBar ready={ready} error={error} />
+      <div className="flex-shrink-0">
+        <StatusBar ready={ready} error={error} />
+      </div>
 
+      {/* `min-h-0` lets the grid row shrink-fit instead of growing to
+          its content (the default for flex children — without this,
+          internal overflow doesn't trigger). */}
       <div
-        className="flex-1 grid"
+        className="flex-1 min-h-0 grid"
         style={{
           gridTemplateColumns: `${leftWidth} 1fr ${rightWidth}`,
           transition: "grid-template-columns 0.2s ease",
         }}
       >
         <aside
-          className="border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden"
+          className="border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden min-h-0"
           aria-label="Primary navigation"
         >
           {leftRail}
         </aside>
 
-        <main className="overflow-auto bg-[var(--color-surface)] px-6 py-6 min-w-0">
+        <main className="overflow-y-auto bg-[var(--color-surface)] px-6 py-6 min-w-0 min-h-0">
           {children}
         </main>
 
         <aside
-          className="border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden flex flex-col"
+          className="border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden flex flex-col min-h-0"
           aria-label="AI assistant"
         >
           {rightCollapsed ? (
@@ -83,19 +94,19 @@ export default function Layout({
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between px-4 pt-3 pb-2">
+              <div className="flex items-center justify-between px-4 pt-3 pb-2 flex-shrink-0">
                 <p className="text-xs text-[var(--color-text-muted)] tracking-wide uppercase">
                   Assistant
                 </p>
                 <CollapseToggle side="right" collapsed={false} onToggle={onToggleRight} />
               </div>
-              <div className="flex-1 overflow-hidden">{rightRail}</div>
+              <div className="flex-1 min-h-0 overflow-hidden">{rightRail}</div>
             </>
           )}
         </aside>
       </div>
 
-      <footer className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-3 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
+      <footer className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-2 flex items-center justify-between text-xs text-[var(--color-text-muted)] flex-shrink-0">
         <span>
           Powered by{" "}
           <a
@@ -111,7 +122,6 @@ export default function Layout({
           Workflows are data · Audit trail is the backbone · Plain language always
         </span>
       </footer>
-
     </div>
   );
 }
