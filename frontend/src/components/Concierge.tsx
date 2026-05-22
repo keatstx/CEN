@@ -8,6 +8,7 @@ import {
   type ChatMessage,
   type ConciergeAction,
   type ConciergeCitation,
+  type ConciergeContext,
   type ConciergeResponse,
   type SuggestedInput,
 } from "../api";
@@ -15,7 +16,17 @@ import Button from "./ui/Button";
 import SuggestedQuestions from "./chat/SuggestedQuestions";
 
 interface Props {
+  /** The case the concierge is currently grounded against. Drives
+   * history loading + chat persistence + per-step proactive prompts. */
   caseRecord: Session | null;
+  /** What the user is looking at in the center activity panel. Drives
+   * retrieval routing — module / sop / queue / case. When omitted, the
+   * concierge falls back to a "case" context derived from caseRecord. */
+  context?: ConciergeContext;
+  /** Short, human label describing the current subject — rendered in
+   * a sticky pill at the top of the panel so the user can see exactly
+   * what the assistant is grounded against. Helps catch context drift. */
+  contextLabel?: string;
   onSuggestionsUpdate?: (suggestions: SuggestedInput[]) => void;
   /** Dispatch a concierge action back into the app. The handler runs
    * the navigation/state change (switch tab, open case, start workflow). */
@@ -44,7 +55,20 @@ const NO_CASE_OPENER =
  * step, prior turns) and surfaces citations with a kind tag so the UI
  * can label them as "FAQ", "Step", etc.
  */
-export default function Concierge({ caseRecord, onSuggestionsUpdate, onAction }: Props) {
+export default function Concierge({
+  caseRecord,
+  context,
+  contextLabel,
+  onSuggestionsUpdate,
+  onAction,
+}: Props) {
+  // Effective context — explicit prop wins; otherwise derive from
+  // caseRecord (back-compat). Stable across renders for the same case.
+  const effectiveContext: ConciergeContext = context ?? {
+    kind: caseRecord ? "case" : "none",
+    case_id: caseRecord?.id ?? null,
+    current_node_id: caseRecord?.pending_node ?? null,
+  };
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -161,11 +185,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate, onAction }:
     ]);
     setBusy(true);
     try {
-      const resp: ConciergeResponse = await askConcierge(
-        question,
-        caseRecord?.id,
-        caseRecord?.pending_node ?? undefined,
-      );
+      const resp: ConciergeResponse = await askConcierge(question, effectiveContext);
       setTurns((prev) => {
         const next = prev.slice(0, -1);
         next.push({
@@ -199,88 +219,115 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate, onAction }:
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 px-4 pb-3">
-        <span
-          className="inline-block w-2.5 h-2.5 rounded-full"
-          style={{ background: "var(--color-blue)" }}
-        />
-        <h3 className="text-sm font-semibold">AI Concierge</h3>
-        {historyLoading && (
-          <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
-            Loading thread…
-          </span>
-        )}
-      </div>
-
-      {/* Thread */}
-      <div
-        ref={threadRef}
-        className="flex-1 overflow-y-auto space-y-3 px-4 pb-3 min-h-[200px]"
-      >
-        {/* Proactive opener — landed warm and oriented before the
-            navigator has typed anything. Stays visible at the top
-            even after the conversation starts so context doesn't get
-            lost on long threads. */}
-        {!historyLoading && (
-          <div
-            className="text-xs leading-relaxed pl-3 border-l-2"
-            style={{
-              borderColor: "var(--color-blue)",
-              color: "var(--color-text-secondary)",
-            }}
-          >
-            {opener}
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex-shrink-0">
+        <div className="flex items-center gap-2 px-4 pb-2">
+          <span
+            className="inline-block w-2.5 h-2.5 rounded-full"
+            style={{ background: "var(--color-blue)" }}
+          />
+          <h3 className="text-sm font-semibold">AI Concierge</h3>
+          {historyLoading && (
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
+              Loading thread…
+            </span>
+          )}
+        </div>
+        {contextLabel && (
+          <div className="mx-4 mb-2 px-2.5 py-1 rounded-md bg-[var(--color-surface-overlay)] border border-[var(--color-border)] text-[10px] text-[var(--color-text-secondary)] flex items-center gap-1.5">
+            <span className="text-[var(--color-text-muted)]">Grounded in:</span>
+            <span className="font-medium text-[var(--color-text-primary)] truncate">
+              {contextLabel}
+            </span>
           </div>
         )}
-        {turns.map((t, i) => (
-          <ThreadTurn key={i} turn={t} onAction={onAction} />
-        ))}
       </div>
 
-      {error && (
-        <p className="text-[11px] text-[var(--color-danger)] px-4 pb-2">{error}</p>
-      )}
-
-      <SuggestedQuestions
-        questions={suggestedQuestions}
-        onAsk={sendText}
-        disabled={busy}
-      />
-
-      <form
-        className="flex gap-1.5 px-4 pb-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
+      {/* Single scroll container for the whole conversation, with the
+          input group sticky-anchored to the bottom of the scroll
+          viewport so it's always visible no matter how long the thread
+          grows. backdrop-blur softens whatever scrolls behind it. */}
+      <div
+        ref={threadRef}
+        className="flex-1 overflow-y-auto flex flex-col min-h-0"
       >
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            caseRecord
-              ? "Ask about this step…"
-              : "Ask anything from your FAQ library…"
-          }
-          disabled={busy}
-          className="flex-1 text-xs"
-        />
-        <Button
-          type="submit"
-          disabled={!draft.trim()}
-          loading={busy}
-          loadingLabel="Thinking…"
-        >
-          Ask
-        </Button>
-      </form>
+        {/* Conversation — grows to fill remaining space so the sticky
+            input group sits at the bottom of the viewport (not the
+            bottom of short content). */}
+        <div className="flex-1 space-y-3 px-4 pb-3 min-h-[200px]">
+          {!historyLoading && (
+            <div
+              className="text-xs leading-relaxed pl-3 border-l-2"
+              style={{
+                borderColor: "var(--color-blue)",
+                color: "var(--color-text-secondary)",
+              }}
+            >
+              {opener}
+            </div>
+          )}
+          {turns.map((t, i) => (
+            <ThreadTurn key={i} turn={t} onAction={onAction} />
+          ))}
+        </div>
 
-      <p className="text-[10px] text-[var(--color-text-muted)] px-4 pb-3 italic leading-snug">
-        I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
-        I can't give personalized medical, legal, or financial advice.
-      </p>
+        {/* Sticky input group — chips + form + disclaimer travel
+            together. backdrop-blur + translucent surface let the
+            conversation fade behind as the user scrolls back. */}
+        <div
+          className="sticky bottom-0 mt-auto border-t border-[var(--color-border)]"
+          style={{
+            background: "color-mix(in srgb, var(--color-surface) 88%, transparent)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.04)",
+          }}
+        >
+          {error && (
+            <p className="text-[11px] text-[var(--color-danger)] px-4 pt-2">{error}</p>
+          )}
+
+          <SuggestedQuestions
+            questions={suggestedQuestions}
+            onAsk={sendText}
+            disabled={busy}
+          />
+
+          <form
+            className="flex gap-1.5 px-4 pt-1 pb-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={
+                caseRecord
+                  ? "Ask about this step…"
+                  : "Ask anything from your FAQ library…"
+              }
+              disabled={busy}
+              className="flex-1 text-xs"
+            />
+            <Button
+              type="submit"
+              disabled={!draft.trim()}
+              loading={busy}
+              loadingLabel="Thinking…"
+            >
+              Ask
+            </Button>
+          </form>
+
+          <p className="text-[10px] text-[var(--color-text-muted)] px-4 pb-3 italic leading-snug">
+            I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
+            I can't give personalized medical, legal, or financial advice.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

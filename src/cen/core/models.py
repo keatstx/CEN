@@ -294,10 +294,39 @@ class FAQCreate(BaseModel):
     source_filename: str = ""
 
 
-class ConciergeQuery(BaseModel):
-    question: str
+class ConciergeContext(BaseModel):
+    """What the user is currently looking at in the center activity panel.
+
+    The concierge uses this to route retrieval — when the user is on
+    SOP Studio, ground against the active SOP draft + validation issues
+    instead of falling through to FAQ-only. Solves the "you ask about
+    the draft and the AI answers about charity care" mismatch.
+
+    `kind` is a discriminator (additive — old clients that don't send
+    `context` fall back to "case" behavior using the legacy `case_id`
+    field). All other fields are optional by kind:
+    - kind="case"   uses case_id + current_node_id
+    - kind="module" uses module_name
+    - kind="sop"    uses sop_id
+    - kind="queue"  no payload (queue is per-user)
+    - kind="none"   no grounding beyond FAQ
+    """
+
+    kind: str = "case"
     case_id: Optional[str] = None
     current_node_id: Optional[str] = None
+    module_name: Optional[str] = None
+    sop_id: Optional[str] = None
+
+
+class ConciergeQuery(BaseModel):
+    question: str
+    # Legacy: pre-context clients sent these directly. New clients
+    # SHOULD pass `context` instead; we map legacy fields to a "case"
+    # context on the server when only case_id is present.
+    case_id: Optional[str] = None
+    current_node_id: Optional[str] = None
+    context: Optional[ConciergeContext] = None
 
 
 class ConciergeCitation(BaseModel):

@@ -319,6 +319,13 @@ async def answer_question(
     owner_id: Optional[str] = None,
     llm: Optional[object] = None,
     available_modules: Optional[List[str]] = None,
+    # Polymorphic subject (Phase 6). When kind != "case" the case
+    # parameter will be None; we ground in the alternate subject's
+    # chunks instead.
+    subject_kind: str = "case",
+    subject_module_name: Optional[str] = None,
+    subject_aop: Optional[AOPDefinition] = None,
+    subject_sop: Optional[object] = None,  # SOPRecord — typed loose to avoid cycle
 ) -> ConciergeResponse:
     """Answer a user question.
 
@@ -357,18 +364,39 @@ async def answer_question(
         await _persist_assistant(chat_store, case, response, owner_id)
         return response
 
-    # 3) Retrieve from each source.
+    # 3) Retrieve from each source. FAQ retrieval is module-scoped
+    # whenever a module is known (case or module subject); SOP/queue
+    # subjects fall through to global FAQs.
+    faq_module = module_name or (case.module_name if case else None) or subject_module_name
     faq_chunks = await _retrieve_faqs(
         question=question,
         faq_store=faq_store,
-        module_name=module_name or (case.module_name if case else None),
+        module_name=faq_module,
         project_id=project_id or (case.project_id if case else None),
         owner_id=owner_id,
     )
     workflow_chunks = _retrieve_workflow_context(
         case=case, aop=aop, current_node_id=current_node_id
     )
-    fused = _fuse(faq_chunks, workflow_chunks, top_k=5)
+
+    # Subject-specific context — Phase 6 polymorphic concierge.
+    subject_chunks: List[RetrievedChunk] = []
+    if subject_kind == "module" and subject_aop is not None:
+        from cen.core.concierge_context import retrieve_module_chunks
+        subject_chunks = [
+            RetrievedChunk(text=c.text, score=c.score, citation=c.citation)
+            for c in retrieve_module_chunks(
+                aop=subject_aop, module_name=subject_module_name
+            )
+        ]
+    elif subject_kind == "sop" and subject_sop is not None:
+        from cen.core.concierge_context import retrieve_sop_chunks
+        subject_chunks = [
+            RetrievedChunk(text=c.text, score=c.score, citation=c.citation)
+            for c in retrieve_sop_chunks(sop=subject_sop)
+        ]
+
+    fused = _fuse(faq_chunks, workflow_chunks + subject_chunks, top_k=6)
 
     # 4) Suggestions: extract structured values from the chat history
     # given the case's pending input fields. Independent of whether

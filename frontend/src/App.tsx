@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReadyResponse } from "./types";
-import { fetchReady, type ConciergeAction } from "./api";
+import { MODULE_CONFIGS } from "./types";
+import { fetchReady, type ConciergeAction, type ConciergeContext } from "./api";
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { useLayoutCollapse } from "./hooks/useLayoutCollapse";
 import { useCaseSession } from "./hooks/useCaseSession";
@@ -148,9 +149,50 @@ export default function App() {
     />
   );
 
+  // Per-tab concierge context: route retrieval to whatever the user
+  // is actually looking at in the center. Solves the "ask about an
+  // SOP, get a charity-care answer" mismatch.
+  const conciergeContext: ConciergeContext = (() => {
+    if (activeTab === "executor" && caseSession.activeCase) {
+      return {
+        kind: "case",
+        case_id: caseSession.activeCase.id,
+        current_node_id: caseSession.activeCase.pending_node,
+      };
+    }
+    if (activeTab === "dag-viewer" && dagSelectedModule) {
+      return { kind: "module", module_name: dagSelectedModule };
+    }
+    if (activeTab === "sop-studio" && sopSession.selectedId) {
+      return { kind: "sop", sop_id: sopSession.selectedId };
+    }
+    if (activeTab === "dashboard") {
+      return { kind: "queue" };
+    }
+    return { kind: "none" };
+  })();
+
+  const conciergeContextLabel: string | undefined = (() => {
+    if (conciergeContext.kind === "case" && caseSession.activeCase) {
+      return `Case: ${caseSession.activeCase.name || caseSession.activeCase.module_name}`;
+    }
+    if (conciergeContext.kind === "module" && dagSelectedModule) {
+      return `Workflow: ${MODULE_CONFIGS[dagSelectedModule]?.label ?? dagSelectedModule}`;
+    }
+    if (conciergeContext.kind === "sop" && sopSession.selected) {
+      return `SOP: ${sopSession.selected.filename}`;
+    }
+    if (conciergeContext.kind === "queue") {
+      return "Your case queue";
+    }
+    return undefined;
+  })();
+
   const rightRail = (
     <Concierge
       caseRecord={caseSession.activeCase}
+      context={conciergeContext}
+      contextLabel={conciergeContextLabel}
       onAction={handleConciergeAction}
     />
   );

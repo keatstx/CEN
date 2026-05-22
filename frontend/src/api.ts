@@ -249,17 +249,30 @@ export interface FAQ {
   created_at: string;
 }
 
+/** Polymorphic concierge subject — what the user is looking at in the
+ * center activity panel. The backend uses this to route retrieval so
+ * answers stay aligned with what the user is doing. */
+export interface ConciergeContext {
+  kind: "case" | "module" | "sop" | "queue" | "none";
+  case_id?: string | null;
+  current_node_id?: string | null;
+  module_name?: string | null;
+  sop_id?: string | null;
+}
+
 export function askConcierge(
   question: string,
-  caseId?: string,
-  currentNodeId?: string,
+  context: ConciergeContext,
 ): Promise<ConciergeResponse> {
   return request<ConciergeResponse>("/concierge/ask", {
     method: "POST",
     body: JSON.stringify({
       question,
-      case_id: caseId,
-      current_node_id: currentNodeId ?? null,
+      // Send both the new `context` block and the legacy `case_id` /
+      // `current_node_id` fields so backend can dispatch either way.
+      context,
+      case_id: context.case_id ?? null,
+      current_node_id: context.current_node_id ?? null,
     }),
   });
 }

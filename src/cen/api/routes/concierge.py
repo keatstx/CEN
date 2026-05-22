@@ -14,9 +14,11 @@ from cen.api.dependencies import (
     get_faq_store,
     get_llm,
     get_session_store,
+    get_sop_store,
 )
 from cen.core.chat_store import ChatMessageStore
 from cen.core.concierge import answer_question, opener_for_case
+from cen.core.concierge_context import normalize_context
 from cen.core.exceptions import SessionNotFoundError
 from cen.core.faq_import import import_faqs
 from cen.core.faq_store import FAQStore
@@ -32,6 +34,7 @@ from cen.core.models import (
 from cen.core.proactive import NextQuestion, proactive_prompt_for_step
 from cen.core.session_store import SessionStore
 from cen.core.suggestions import RegexExtractor
+from cen.sop.store import SOPStore
 from cen.privacy.pii_scrubber import create_scrubber
 
 # A single shared scrubber for the concierge prompt assembly path. The
@@ -134,32 +137,52 @@ async def ask_concierge(
     faq_store: FAQStore = Depends(get_faq_store),
     chat_store: ChatMessageStore = Depends(get_chat_store),
     case_store: SessionStore = Depends(get_session_store),
+    sop_store: SOPStore = Depends(get_sop_store),
     engines: dict = Depends(get_engines),
     llm=Depends(get_llm),
     user: User = Depends(get_current_user),
 ) -> ConciergeResponse:
-    """Answer a question using the FAQ store, the case's workflow
-    state, and chat history. The user's question is PII-scrubbed
-    before retrieval per CLAUDE.md non-negotiable #1.
+    """Answer a question using the FAQ store, the active subject's
+    context (case / module / sop / queue), and chat history. The
+    user's question is PII-scrubbed before retrieval per CLAUDE.md
+    non-negotiable #1.
 
-    When the LLM backend is configured (anything other than mock),
-    the synthesis path uses it for warm, grounded replies. The
-    backend choice is enforced by the deployment_mode + BAA gate at
-    app startup (Non-Negotiable #5), so this layer trusts whatever's
-    wired.
+    The `context` field on the request body selects what to ground
+    against — see ConciergeContext. Legacy clients that send only
+    `case_id` get mapped to a case context for back-compat.
     """
     scrubbed_question = _scrubber.scrub(body.question)
+    ctx = normalize_context(
+        query_context=body.context,
+        legacy_case_id=body.case_id,
+        legacy_node_id=body.current_node_id,
+    )
 
     case = None
     aop = None
-    if body.case_id:
-        case = await case_store.get(body.case_id)
+    module_name_override = None
+    aop_override = None
+    sop_record = None
+
+    if ctx.kind == "case" and ctx.case_id:
+        case = await case_store.get(ctx.case_id)
         if case is None:
-            raise SessionNotFoundError(body.case_id)
+            raise SessionNotFoundError(ctx.case_id)
         if case.owner_id is not None and case.owner_id != user.id:
-            raise SessionNotFoundError(body.case_id)
+            raise SessionNotFoundError(ctx.case_id)
         engine = engines.get(case.module_name)
         aop = engine._aop if engine is not None else None  # noqa: SLF001
+
+    elif ctx.kind == "module" and ctx.module_name:
+        engine = engines.get(ctx.module_name)
+        if engine is not None:
+            aop_override = engine._aop  # noqa: SLF001
+            module_name_override = ctx.module_name
+
+    elif ctx.kind == "sop" and ctx.sop_id:
+        sop_record = await sop_store.get(ctx.sop_id)
+        if sop_record is not None and sop_record.owner_id not in (None, user.id):
+            sop_record = None  # cross-tenant — treat as missing
 
     return await answer_question(
         scrubbed_question,
@@ -167,10 +190,14 @@ async def ask_concierge(
         chat_store=chat_store if case is not None else None,
         case=case,
         aop=aop,
-        current_node_id=body.current_node_id,
+        current_node_id=ctx.current_node_id,
         owner_id=user.id,
         llm=llm,
         available_modules=list(engines.keys()),
+        subject_kind=ctx.kind,
+        subject_module_name=module_name_override,
+        subject_aop=aop_override,
+        subject_sop=sop_record,
     )
 
 
