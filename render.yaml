@@ -2,6 +2,15 @@
 # Render assigns a unique hash suffix (-48pm) to the service name; the
 # raw `cen.onrender.com` host is NOT this service. Smoke-test the URL
 # above after every deploy.
+#
+# LLM: production runs Groq's free tier via the OpenAI-compatible
+# `api` backend. Set CEN_LLM_API_KEY in the Render dashboard (Secrets) —
+# it's `sync: false` so it's never committed. The deployment_mode
+# stays `synthetic` (default), which means the BAA gate is bypassed:
+# the api backend is safe here ONLY because no real PHI lives in this
+# deployment. Flipping deployment_mode=production would require
+# CEN_LLM_BAA_CONFIRMED=true (i.e., a real BAA with Groq) — see
+# src/cen/api/app.py _enforce_deployment_mode.
 
 services:
   - type: web
@@ -10,6 +19,12 @@ services:
     plan: free
     envVars:
       - key: CEN_LLM_BACKEND
-        value: mock
+        value: api
+      - key: CEN_LLM_API_BASE
+        value: https://api.groq.com/openai/v1
+      - key: CEN_LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: CEN_LLM_API_KEY
+        sync: false           # set in Render dashboard (Secret)
       - key: CEN_DB_PATH
         value: /tmp/cen.db
