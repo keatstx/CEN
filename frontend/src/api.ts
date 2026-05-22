@@ -70,6 +70,14 @@ export function fetchNextQuestion(caseId: string): Promise<NextQuestion> {
   return request<NextQuestion>(`/concierge/next_question/${caseId}`);
 }
 
+// ── Concierge actions (clickable next-steps under the assistant turn) ──
+
+export interface ConciergeAction {
+  kind: "open_case" | "start_workflow" | "switch_tab" | "open_dashboard";
+  label: string;
+  payload: Record<string, unknown>;
+}
+
 // ── Cases (canonical name; /sessions remains as a legacy alias) ──
 
 export function createCase(
@@ -205,9 +213,10 @@ export interface ConciergeCitation {
 
 export interface ConciergeResponse {
   answer: string;
-  mode: "synthesis" | "lookup" | "guardrail" | "no_match";
+  mode: "synthesis" | "lookup" | "guardrail" | "no_match" | "llm_synthesis";
   citations: ConciergeCitation[];
   suggested_inputs: SuggestedInput[];
+  actions: ConciergeAction[];
 }
 
 export interface SuggestedInput {

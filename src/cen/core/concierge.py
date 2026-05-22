@@ -318,6 +318,7 @@ async def answer_question(
     project_id: Optional[str] = None,
     owner_id: Optional[str] = None,
     llm: Optional[object] = None,
+    available_modules: Optional[List[str]] = None,
 ) -> ConciergeResponse:
     """Answer a user question.
 
@@ -378,8 +379,18 @@ async def answer_question(
     # 5) Synthesize. Prefer the LLM-grounded path; fall back to the
     # rule-based stitcher when no LLM is configured (or fails).
     if not fused:
+        from cen.core.proactive import derive_actions  # local: avoids cycle
+
+        no_match_actions = derive_actions(
+            question=question,
+            case=case,
+            available_modules=available_modules or [],
+        )
         response = ConciergeResponse(
-            answer=_NO_MATCH_REPLY, mode="no_match", suggested_inputs=suggestions
+            answer=_NO_MATCH_REPLY,
+            mode="no_match",
+            suggested_inputs=suggestions,
+            actions=no_match_actions,
         )
         await _persist_assistant(chat_store, case, response, owner_id)
         return response
@@ -405,11 +416,19 @@ async def answer_question(
         )
         mode = "synthesis"
 
+    from cen.core.proactive import derive_actions  # local import: avoids cycle
+
+    actions = derive_actions(
+        question=question,
+        case=case,
+        available_modules=available_modules or [],
+    )
     response = ConciergeResponse(
         answer=answer,
         mode=mode,
         citations=citations,
         suggested_inputs=suggestions,
+        actions=actions,
     )
     await _persist_assistant(chat_store, case, response, owner_id)
     return response

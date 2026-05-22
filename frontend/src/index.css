@@ -28,7 +28,7 @@
   --color-blue: #2563eb;
   --color-blue-muted: #2563eb12;
   /* Layout collapse — flipped by useLayoutCollapse */
-  --left-rail-width: 240px;
+  --left-rail-width: 280px;
   --right-rail-width: 360px;
 }
 

@@ -6,6 +6,7 @@ import {
   fetchConciergeOpener,
   fetchNextQuestion,
   type ChatMessage,
+  type ConciergeAction,
   type ConciergeCitation,
   type ConciergeResponse,
   type SuggestedInput,
@@ -16,6 +17,9 @@ import SuggestedQuestions from "./chat/SuggestedQuestions";
 interface Props {
   caseRecord: Session | null;
   onSuggestionsUpdate?: (suggestions: SuggestedInput[]) => void;
+  /** Dispatch a concierge action back into the app. The handler runs
+   * the navigation/state change (switch tab, open case, start workflow). */
+  onAction?: (action: ConciergeAction) => void;
 }
 
 interface Turn {
@@ -23,6 +27,7 @@ interface Turn {
   text: string;
   citations: ConciergeCitation[];
   mode: string;
+  actions?: ConciergeAction[];
   pending?: boolean;
 }
 
@@ -39,7 +44,7 @@ const NO_CASE_OPENER =
  * step, prior turns) and surfaces citations with a kind tag so the UI
  * can label them as "FAQ", "Step", etc.
  */
-export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
+export default function Concierge({ caseRecord, onSuggestionsUpdate, onAction }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -168,6 +173,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
           text: resp.answer,
           citations: resp.citations,
           mode: resp.mode,
+          actions: resp.actions,
         });
         return next;
       });
@@ -228,7 +234,7 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
           </div>
         )}
         {turns.map((t, i) => (
-          <ThreadTurn key={i} turn={t} />
+          <ThreadTurn key={i} turn={t} onAction={onAction} />
         ))}
       </div>
 
@@ -279,7 +285,13 @@ export default function Concierge({ caseRecord, onSuggestionsUpdate }: Props) {
   );
 }
 
-function ThreadTurn({ turn }: { turn: Turn }) {
+function ThreadTurn({
+  turn,
+  onAction,
+}: {
+  turn: Turn;
+  onAction?: (action: ConciergeAction) => void;
+}) {
   if (turn.role === "user") {
     return (
       <div className="flex justify-end">
@@ -304,6 +316,20 @@ function ThreadTurn({ turn }: { turn: Turn }) {
         <div className="mt-1.5 space-y-0.5">
           {turn.citations.map((c, idx) => (
             <CitationLine key={idx} citation={c} />
+          ))}
+        </div>
+      )}
+      {turn.actions && turn.actions.length > 0 && onAction && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {turn.actions.map((a, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => onAction(a)}
+              className="text-[11px] px-2.5 py-1 rounded border border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent)] hover:text-white transition-colors font-medium"
+            >
+              {a.label} →
+            </button>
           ))}
         </div>
       )}

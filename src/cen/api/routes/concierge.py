@@ -170,6 +170,7 @@ async def ask_concierge(
         current_node_id=body.current_node_id,
         owner_id=user.id,
         llm=llm,
+        available_modules=list(engines.keys()),
     )
 
 

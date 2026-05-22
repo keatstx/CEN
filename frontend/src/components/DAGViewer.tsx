@@ -475,12 +475,10 @@ function DAGCanvas({
 // ── Main component ──
 
 interface Props {
-  modules: string[];
   selectedModule: string;
-  onModuleChange: (mod: string) => void;
 }
 
-export default function DAGViewer({ modules, selectedModule, onModuleChange }: Props) {
+export default function DAGViewer({ selectedModule }: Props) {
   const [aop, setAop] = useState<AOPDefinition | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -560,40 +558,52 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-        {/* Left — module selector + detail */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="card">
-            <div className="space-y-3">
-              <label
-                htmlFor="dag-module-select"
-                className="block text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]"
-              >
-                Module
-              </label>
-              <select
-                id="dag-module-select"
-                value={selectedModule}
-                onChange={(e) => onModuleChange(e.target.value)}
-              >
-                <option value="">— Choose a module —</option>
-                {modules.map((m) => (
-                  <option key={m} value={m}>
-                    {MODULE_CONFIGS[m]?.label ?? m}
-                  </option>
-                ))}
-              </select>
-              {aop && (
-                <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
-                  {aop.description || MODULE_CONFIGS[selectedModule]?.description}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        {/* Canvas — fills the center */}
+        <div>
+          <div className="card p-2">
+            {aop && (
+              <div className="flex items-center justify-between px-2 py-1 mb-1">
+                <span className="text-[11px] text-[var(--color-text-muted)]">
+                  {MODULE_CONFIGS[selectedModule]?.label ?? selectedModule} · drag to pan · scroll to zoom
+                </span>
+                {toolbar}
+              </div>
+            )}
+            <div className="h-[600px] flex items-center justify-center bg-[var(--color-surface-raised)] rounded">
+              {loading && <p className="text-sm text-[var(--color-text-muted)]">Loading graph...</p>}
+              {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
+              {!selectedModule && !loading && (
+                <p className="text-subtle text-center max-w-sm px-6">
+                  Pick a module from the left panel to view its workflow map.
                 </p>
+              )}
+              {layout && aop && !fullscreen && (
+                <DAGCanvas
+                  aop={aop}
+                  layout={layout}
+                  posMap={posMap}
+                  selectedNode={selectedNode}
+                  setSelectedNode={setSelectedNode}
+                  dir={dir}
+                  className="w-full h-full"
+                />
               )}
             </div>
           </div>
+        </div>
 
+        {/* Right — info + legend + node detail */}
+        <div className="space-y-4">
           {aop && (
             <div className="card">
-              <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+              <p className="text-sm font-medium text-[var(--color-text-primary)] mb-1">
+                {MODULE_CONFIGS[selectedModule]?.label ?? selectedModule}
+              </p>
+              <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] mb-2">
+                {aop.description || MODULE_CONFIGS[selectedModule]?.description}
+              </p>
+              <div className="flex items-center gap-4 text-[11px] text-[var(--color-text-muted)]">
                 <span>{aop.nodes.length} nodes</span>
                 <span>{aop.edges.length} edges</span>
                 <span>v{aop.version}</span>
@@ -616,38 +626,6 @@ export default function DAGViewer({ modules, selectedModule, onModuleChange }: P
           )}
 
           {activeNode && <DetailPanel node={activeNode} />}
-        </div>
-
-        {/* Right — canvas */}
-        <div className="lg:col-span-3">
-          <div className="card p-2">
-            {aop && (
-              <div className="flex items-center justify-between px-2 py-1 mb-1">
-                <span className="text-[11px] text-[var(--color-text-muted)]">
-                  Drag to pan · Scroll to zoom
-                </span>
-                {toolbar}
-              </div>
-            )}
-            <div className="h-[600px] flex items-center justify-center bg-[var(--color-bg)] rounded">
-              {loading && <p className="text-sm text-[var(--color-text-muted)]">Loading graph...</p>}
-              {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
-              {!selectedModule && !loading && (
-                <p className="text-subtle text-center">Select a module to view its workflow graph.</p>
-              )}
-              {layout && aop && !fullscreen && (
-                <DAGCanvas
-                  aop={aop}
-                  layout={layout}
-                  posMap={posMap}
-                  selectedNode={selectedNode}
-                  setSelectedNode={setSelectedNode}
-                  dir={dir}
-                  className="w-full h-full"
-                />
-              )}
-            </div>
-          </div>
         </div>
       </div>
 

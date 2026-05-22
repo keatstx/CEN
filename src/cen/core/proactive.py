@@ -12,11 +12,12 @@ module; see `api/routes/concierge.py`.
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from pydantic import BaseModel
 
-from cen.core.models import AOPDefinition, Session
+from cen.core.models import AOPDefinition, ConciergeAction, Session
 
 
 class NextQuestion(BaseModel):
@@ -129,3 +130,69 @@ def _input_prompt(step_label: str, field) -> str:
     if desc:
         return f"{intro} {desc}"
     return intro
+
+
+# ── Action derivation (Phase 5c) ────────────────────────────────────
+
+# Module keyword → label mapping. Hand-authored, navigator-friendly.
+# Each tuple is (module_name, label_for_button, [trigger_phrases]).
+_MODULE_TRIGGERS: List[tuple] = [
+    ("charity_care_navigator",     "Start charity care",          ["charity care", "financial assistance", "hospital write-off"]),
+    ("debt_cancellation_engine",   "Start debt cancellation",     ["debt cancellation", "dispute bill", "no surprises act", "duplicate charge"]),
+    ("insurance_appeal_assistant", "Start an insurance appeal",   ["insurance appeal", "appeal denial", "claim denied"]),
+    ("benefits_enrollment_navigator", "Start benefits enrollment", ["benefits", "medicaid", "aca", "chip"]),
+    ("community_resource_router",  "Find community resources",    ["housing", "food", "transportation", "community resource"]),
+    ("master_case_orchestrator",   "Start a guided intake",       ["where do i start", "not sure", "guided", "orchestrator"]),
+]
+
+_DASHBOARD_TRIGGERS = re.compile(
+    r"\b(dashboard|my cases|queue|what's next|what is next|pending|attention)\b",
+    re.IGNORECASE,
+)
+
+
+def derive_actions(
+    *,
+    question: str,
+    case: Optional[Session],
+    available_modules: List[str],
+) -> List[ConciergeAction]:
+    """Rule-based next-step actions surfaced as clickable buttons under
+    the assistant turn. Conservative on purpose — only fires when the
+    question clearly maps to a navigation/start intent. Returns up to
+    3 actions.
+
+    No LLM call — keeps the action set deterministic and cheap.
+    """
+    actions: List[ConciergeAction] = []
+    q = question.lower()
+
+    # If the user is asking about their queue/dashboard, offer it.
+    if _DASHBOARD_TRIGGERS.search(q):
+        actions.append(
+            ConciergeAction(
+                kind="open_dashboard",
+                label="Open the dashboard",
+                payload={},
+            )
+        )
+
+    # Workflow-start intents — match module keywords.
+    for module_name, label, phrases in _MODULE_TRIGGERS:
+        if module_name not in available_modules:
+            continue
+        if any(p in q for p in phrases):
+            # If we're already inside a case for this module, skip.
+            if case and case.module_name == module_name:
+                continue
+            actions.append(
+                ConciergeAction(
+                    kind="start_workflow",
+                    label=label,
+                    payload={"module_name": module_name},
+                )
+            )
+            if len(actions) >= 3:
+                break
+
+    return actions[:3]

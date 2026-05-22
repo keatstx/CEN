@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import {
-  deleteSOP,
-  extractSOP,
-  listSOPs,
-  parseSOP,
-  promoteSOP,
-  uploadSOP,
   type DraftEditResponse,
 } from "../api";
 import type { SOPRecord } from "../types";
+import type { SOPSession } from "../hooks/useSOPSession";
 import Button from "./ui/Button";
-import Spinner from "./ui/Spinner";
 import DraftDAG from "./sop/DraftDAG";
 import ValidationPanel from "./sop/ValidationPanel";
 
 interface Props {
+  session: SOPSession;
   onModulePromoted?: () => void;
 }
 
@@ -34,304 +29,53 @@ const STATUS_COLORS: Record<SOPRecord["status"], string> = {
   failed: "var(--color-error)",
 };
 
-export default function SOPStudio({ onModulePromoted }: Props) {
-  const [sops, setSops] = useState<SOPRecord[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  // Upload runs three sequential server calls (upload, parse, extract).
-  // Track which stage we're in so the user sees real progress, not
-  // a single "loading" spinner that lasts 5+ seconds with no signal.
-  const [uploadStage, setUploadStage] =
-    useState<"idle" | "uploading" | "parsing" | "extracting">("idle");
+export default function SOPStudio({ session, onModulePromoted }: Props) {
+  const {
+    sops,
+    selected,
+    busy,
+    error,
+    handleParse,
+    handleExtract,
+    handlePromote,
+    refresh,
+    setOnModulePromoted,
+  } = session;
 
+  // Wire the parent's onModulePromoted callback into the hook so
+  // promote can fire it (refreshes the modules list in DAGViewer etc).
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const list = await listSOPs();
-        if (!cancelled) setSops(list);
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
-
-  const refresh = () => setRefreshKey((k) => k + 1);
-
-  const selected = sops.find((s) => s.id === selectedId) ?? null;
-
-  const handleUpload = async (file: File) => {
-    setBusy(true);
-    setError(null);
-    setUploadStage("uploading");
-    try {
-      const created = await uploadSOP(file);
-      setUploadStage("parsing");
-      await parseSOP(created.id);
-      setUploadStage("extracting");
-      await extractSOP(created.id);
-      setSelectedId(created.id);
-      refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-      setUploadStage("idle");
-    }
-  };
-
-  const handleParse = async (id: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await parseSOP(id);
-      refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleExtract = async (id: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await extractSOP(id);
-      refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handlePromote = async (id: string, name?: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await promoteSOP(id, name);
-      refresh();
-      onModulePromoted?.();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await deleteSOP(id);
-      if (selectedId === id) setSelectedId(null);
-      refresh();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    setOnModulePromoted(() => onModulePromoted);
+    return () => setOnModulePromoted(undefined);
+  }, [onModulePromoted, setOnModulePromoted]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-      {/* Left — uploader + list */}
-      <div className="lg:col-span-2 space-y-6">
-        <UploadCard busy={busy} uploadStage={uploadStage} onUpload={handleUpload} />
-        <SOPList
-          sops={sops}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={handleDelete}
-        />
-      </div>
-
-      {/* Right — review pane */}
-      <div className="lg:col-span-3">
-        {error && (
-          <div
-            className="card border-[var(--color-error)] mb-4"
-            style={{ borderColor: "var(--color-error)" }}
-          >
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
-        {!selected ? (
-          <EmptyReview hasUploads={sops.length > 0} />
-        ) : (
-          <ReviewPane
-            sop={selected}
-            busy={busy}
-            onParse={() => handleParse(selected.id)}
-            onExtract={() => handleExtract(selected.id)}
-            onPromote={(name) => handlePromote(selected.id, name)}
-            onDraftUpdated={() => refresh()}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Subcomponents ──────────────────────────────────────────────
-
-function UploadCard({
-  busy,
-  uploadStage,
-  onUpload,
-}: {
-  busy: boolean;
-  uploadStage: "idle" | "uploading" | "parsing" | "extracting";
-  onUpload: (f: File) => void;
-}) {
-  const [dragOver, setDragOver] = useState(false);
-
-  const stageLabel: Record<typeof uploadStage, string> = {
-    idle: "",
-    uploading: "Uploading…",
-    parsing: "Reading the document…",
-    extracting: "Extracting steps…",
-  };
-
-  const handleFile = (file: File) => {
-    onUpload(file);
-  };
-
-  return (
-    <div
-      className={`card transition-colors ${
-        dragOver ? "ring-2 ring-[var(--color-accent)]" : ""
-      }`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!busy) setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        if (busy) return;
-        const file = e.dataTransfer.files[0];
-        if (file) handleFile(file);
-      }}
-    >
-      <h3 className="text-sm font-semibold mb-2">Upload an SOP</h3>
-      <p className="text-xs text-[var(--color-text-muted)] mb-3">
-        Drop a Markdown (.md) or Word (.docx) file here, or click the
-        button below. We'll read it, pull out the steps, and show you
-        a draft workflow you can review before promoting.
-      </p>
-
-      {/* The visible button — actually a label that opens the hidden
-          file input. Real button styling, real hover state. */}
-      <label
-        htmlFor="sop-file-input"
-        className="inline-flex items-center justify-center gap-1.5 rounded font-medium transition-colors border text-xs px-3 py-1.5 cursor-pointer"
-        style={{
-          background: busy ? "var(--color-bg)" : "var(--color-accent)",
-          color: busy ? "var(--color-text-muted)" : "white",
-          borderColor: busy ? "var(--color-border)" : "var(--color-accent)",
-          opacity: busy ? 0.6 : 1,
-          cursor: busy ? "not-allowed" : "pointer",
-          pointerEvents: busy ? "none" : "auto",
-        }}
-        aria-disabled={busy}
-      >
-        {busy && <Spinner size={13} />}
-        {busy ? "Working…" : "Choose a file"}
-      </label>
-      <input
-        id="sop-file-input"
-        type="file"
-        accept=".md,.markdown,.docx,.txt,text/markdown,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        disabled={busy}
-        className="sr-only"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-          e.target.value = "";
-        }}
-      />
-
-      {/* Multi-stage progress — the user sees real movement instead
-          of a single spinner that lasts forever. */}
-      {busy && uploadStage !== "idle" && (
-        <div className="mt-3 flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-          <Spinner size={12} />
-          <span>{stageLabel[uploadStage]}</span>
+    <div>
+      {error && (
+        <div
+          className="card border-[var(--color-error)] mb-4"
+          style={{ borderColor: "var(--color-error)" }}
+        >
+          <p className="text-sm">{error}</p>
         </div>
+      )}
+      {!selected ? (
+        <EmptyReview hasUploads={sops.length > 0} />
+      ) : (
+        <ReviewPane
+          sop={selected}
+          busy={busy}
+          onParse={() => handleParse(selected.id)}
+          onExtract={() => handleExtract(selected.id)}
+          onPromote={(name) => handlePromote(selected.id, name)}
+          onDraftUpdated={() => refresh()}
+        />
       )}
     </div>
   );
 }
 
-function SOPList({
-  sops,
-  selectedId,
-  onSelect,
-  onDelete,
-}: {
-  sops: SOPRecord[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  if (sops.length === 0) {
-    return (
-      <div className="card">
-        <p className="text-xs text-[var(--color-text-muted)]">
-          No SOPs uploaded yet.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="card p-0 overflow-hidden">
-      <div className="border-b border-[var(--color-border)] px-3 py-2">
-        <h3 className="text-sm font-semibold">Your SOPs</h3>
-      </div>
-      <ul className="divide-y divide-[var(--color-border)]">
-        {sops.map((s) => (
-          <li
-            key={s.id}
-            className={`px-3 py-2 cursor-pointer hover:bg-[var(--color-bg)] ${
-              s.id === selectedId ? "bg-[var(--color-bg)]" : ""
-            }`}
-            onClick={() => onSelect(s.id)}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{s.filename}</p>
-                <p
-                  className="text-[11px]"
-                  style={{ color: STATUS_COLORS[s.status] }}
-                >
-                  {STATUS_LABELS[s.status]}
-                </p>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirm(`Delete ${s.filename}?`)) onDelete(s.id);
-                }}
-                className="text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
-                title="Delete this SOP"
-              >
-                Delete
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+// ── Subcomponents ──────────────────────────────────────────────
 
 function EmptyReview({ hasUploads }: { hasUploads: boolean }) {
   return (

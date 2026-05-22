@@ -333,11 +333,30 @@ class SuggestedInput(BaseModel):
     source: str = "chat"     # chat | sop | case_history (future)
 
 
+class ConciergeAction(BaseModel):
+    """A clickable next-step the concierge can dispatch back into the
+    UI. Rendered as a button under the assistant turn; clicking fires
+    the action in the center activity panel (open a case, switch tab,
+    start a workflow, etc.).
+
+    Kinds (v1, additive):
+    - "open_case"     : payload { case_id }
+    - "start_workflow": payload { module_name }
+    - "switch_tab"    : payload { tab }
+    - "open_dashboard": payload {} — convenience for switch_tab dashboard
+    """
+
+    kind: str
+    label: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ConciergeResponse(BaseModel):
     answer: str
     mode: str  # "lookup" | "synthesis" | "guardrail" | "no_match"
     citations: List[ConciergeCitation] = Field(default_factory=list)
     suggested_inputs: List[SuggestedInput] = Field(default_factory=list)
+    actions: List[ConciergeAction] = Field(default_factory=list)
 
 
 class ChatMessage(BaseModel):

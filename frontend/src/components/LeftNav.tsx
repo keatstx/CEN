@@ -18,6 +18,10 @@ interface NavItem {
   group?: "primary" | "footer";
 }
 
+/** Per-tab sub-content rendered below the parent when the parent is
+ * active and the rail is expanded. Null/undefined hides the sub-tree. */
+export type SubContentMap = Partial<Record<Tab, ReactNode>>;
+
 const NAV_ITEMS: NavItem[] = [
   {
     key: "home",
@@ -104,6 +108,10 @@ interface Props {
   isAdmin: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  /** Per-tab sub-content rendered inline under the parent when expanded
+   * and the rail is open. Each key maps to a tab; missing keys render
+   * no sub-tree. */
+  subContent?: SubContentMap;
 }
 
 export default function LeftNav({
@@ -112,6 +120,7 @@ export default function LeftNav({
   isAdmin,
   collapsed,
   onToggleCollapse,
+  subContent,
 }: Props) {
   const visible = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
   const primary = visible.filter((i) => i.group !== "footer");
@@ -120,33 +129,44 @@ export default function LeftNav({
   return (
     <nav
       aria-label="Primary navigation"
-      className="h-full flex flex-col bg-[var(--color-surface)] border-r border-[var(--color-border)]"
+      className="h-full flex flex-col bg-[var(--color-surface)] border-r border-[var(--color-border)] overflow-y-auto"
     >
       <div className={`flex items-center ${collapsed ? "justify-center" : "justify-end"} px-3 pt-3 pb-2`}>
         <CollapseToggle side="left" collapsed={collapsed} onToggle={onToggleCollapse} />
       </div>
 
       <ul className="flex-1 flex flex-col gap-1 px-2 mt-1">
-        {primary.map((item) => (
-          <NavButton
-            key={item.key}
-            item={item}
-            collapsed={collapsed}
-            active={activeTab === item.key}
-            onClick={() => onTabChange(item.key)}
-          />
-        ))}
+        {primary.map((item) => {
+          const active = activeTab === item.key;
+          const sub = !collapsed && active ? subContent?.[item.key] : null;
+          return (
+            <li key={item.key}>
+              <NavButton
+                item={item}
+                collapsed={collapsed}
+                active={active}
+                onClick={() => onTabChange(item.key)}
+              />
+              {sub && (
+                <div className="mt-1 ml-1 mb-2 border-l border-[var(--color-border)] pl-1">
+                  {sub}
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <ul className="flex flex-col gap-1 px-2 pb-3 pt-2 border-t border-[var(--color-border)]">
         {footer.map((item) => (
-          <NavButton
-            key={item.key}
-            item={item}
-            collapsed={collapsed}
-            active={activeTab === item.key}
-            onClick={() => onTabChange(item.key)}
-          />
+          <li key={item.key}>
+            <NavButton
+              item={item}
+              collapsed={collapsed}
+              active={activeTab === item.key}
+              onClick={() => onTabChange(item.key)}
+            />
+          </li>
         ))}
       </ul>
     </nav>
@@ -165,24 +185,22 @@ function NavButton({
   onClick: () => void;
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={onClick}
-        title={collapsed ? item.label : undefined}
-        aria-current={active ? "page" : undefined}
-        className={`w-full flex items-center gap-3 ${
-          collapsed ? "justify-center px-0" : "px-3"
-        } py-2.5 rounded-md text-sm font-medium transition-colors ${
-          active
-            ? "bg-[var(--color-accent-glow)] text-[var(--color-accent)]"
-            : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-text-primary)]"
-        }`}
-        style={collapsed ? { minHeight: 44 } : undefined}
-      >
-        <span className="shrink-0">{item.icon}</span>
-        {!collapsed && <span className="truncate">{item.label}</span>}
-      </button>
-    </li>
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`w-full flex items-center gap-3 ${
+        collapsed ? "justify-center px-0" : "px-3"
+      } py-2.5 rounded-md text-sm font-medium transition-colors ${
+        active
+          ? "bg-[var(--color-accent-glow)] text-[var(--color-accent)]"
+          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-overlay)] hover:text-[var(--color-text-primary)]"
+      }`}
+      style={collapsed ? { minHeight: 44 } : undefined}
+    >
+      <span className="shrink-0">{item.icon}</span>
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </button>
   );
 }
