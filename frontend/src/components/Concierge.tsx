@@ -243,90 +243,77 @@ export default function Concierge({
         )}
       </div>
 
-      {/* Single scroll container for the whole conversation, with the
-          input group sticky-anchored to the bottom of the scroll
-          viewport so it's always visible no matter how long the thread
-          grows. backdrop-blur softens whatever scrolls behind it. */}
+      {/* Thread — scrolls inside its bounded region. Header above
+          and the input group below are siblings, not children, so the
+          form NEVER overlaps the conversation. (Viewport-lock on the
+          outer Layout is what guarantees the region is bounded — see
+          Layout.tsx h-dvh + min-h-0.) */}
       <div
         ref={threadRef}
-        className="flex-1 overflow-y-auto flex flex-col min-h-0"
+        className="flex-1 overflow-y-auto space-y-3 px-4 pb-3 min-h-0"
       >
-        {/* Conversation — grows to fill remaining space so the sticky
-            input group sits at the bottom of the viewport (not the
-            bottom of short content). */}
-        <div className="flex-1 space-y-3 px-4 pb-3 min-h-[200px]">
-          {!historyLoading && (
-            <div
-              className="text-xs leading-relaxed pl-3 border-l-2"
-              style={{
-                borderColor: "var(--color-blue)",
-                color: "var(--color-text-secondary)",
-              }}
-            >
-              {opener}
-            </div>
-          )}
-          {turns.map((t, i) => (
-            <ThreadTurn key={i} turn={t} onAction={onAction} />
-          ))}
-        </div>
-
-        {/* Sticky input group — chips + form + disclaimer travel
-            together. backdrop-blur + translucent surface let the
-            conversation fade behind as the user scrolls back. */}
-        <div
-          className="sticky bottom-0 mt-auto border-t border-[var(--color-border)]"
-          style={{
-            background: "color-mix(in srgb, var(--color-surface) 88%, transparent)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.04)",
-          }}
-        >
-          {error && (
-            <p className="text-[11px] text-[var(--color-danger)] px-4 pt-2">{error}</p>
-          )}
-
-          <SuggestedQuestions
-            questions={suggestedQuestions}
-            onAsk={sendText}
-            disabled={busy}
-          />
-
-          <form
-            className="flex gap-1.5 px-4 pt-1 pb-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              send();
+        {!historyLoading && (
+          <div
+            className="text-xs leading-relaxed pl-3 border-l-2"
+            style={{
+              borderColor: "var(--color-blue)",
+              color: "var(--color-text-secondary)",
             }}
           >
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={
-                caseRecord
-                  ? "Ask about this step…"
-                  : "Ask anything from your FAQ library…"
-              }
-              disabled={busy}
-              className="flex-1 text-xs"
-            />
-            <Button
-              type="submit"
-              disabled={!draft.trim()}
-              loading={busy}
-              loadingLabel="Thinking…"
-            >
-              Ask
-            </Button>
-          </form>
+            {opener}
+          </div>
+        )}
+        {turns.map((t, i) => (
+          <ThreadTurn key={i} turn={t} onAction={onAction} />
+        ))}
+      </div>
 
-          <p className="text-[10px] text-[var(--color-text-muted)] px-4 pb-3 italic leading-snug">
-            I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
-            I can't give personalized medical, legal, or financial advice.
-          </p>
-        </div>
+      {/* Fixed-region bottom — opaque, no backdrop-blur. Thread ends
+          flush against the top of this region; no occlusion. */}
+      <div className="flex-shrink-0 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+        {error && (
+          <p className="text-[11px] text-[var(--color-danger)] px-4 pt-2">{error}</p>
+        )}
+
+        <SuggestedQuestions
+          questions={suggestedQuestions}
+          onAsk={sendText}
+          disabled={busy}
+        />
+
+        <form
+          className="flex gap-1.5 px-4 pt-1 pb-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <input
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={
+              caseRecord
+                ? "Ask about this step…"
+                : "Ask anything from your FAQ library…"
+            }
+            disabled={busy}
+            className="flex-1 text-xs"
+          />
+          <Button
+            type="submit"
+            disabled={!draft.trim()}
+            loading={busy}
+            loadingLabel="Thinking…"
+          >
+            Ask
+          </Button>
+        </form>
+
+        <p className="text-[10px] text-[var(--color-text-muted)] px-4 pb-3 italic leading-snug">
+          I'm a workflow assistant — not a doctor, lawyer, or financial advisor.
+          I can't give personalized medical, legal, or financial advice.
+        </p>
       </div>
     </div>
   );
