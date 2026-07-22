@@ -29,6 +29,10 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:debt",
+          "function:intake"
         ]
       }
     },
@@ -39,7 +43,11 @@
         "label": "HIPAA & Advocacy Consent",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "tags": [
+          "domain:debt",
+          "function:consent"
+        ]
       }
     },
     {
@@ -70,6 +78,10 @@
             "required": false,
             "description": "Attach a PDF or photo of the bill if you have one."
           }
+        ],
+        "tags": [
+          "domain:debt",
+          "function:document_collection"
         ]
       }
     },
@@ -86,6 +98,9 @@
             "required": true,
             "description": "An itemized bill lists each charge separately. If they only have a summary, mark No and the workflow will request one."
           }
+        ],
+        "tags": [
+          "domain:debt"
         ]
       },
       "condition_field": "is_itemized",
@@ -99,7 +114,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Request Itemized Bill",
-        "description": "Send formal request to provider for itemized statement (federal right)."
+        "description": "Send formal request to provider for itemized statement (federal right).",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
@@ -107,7 +125,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Payer & Provider Lookup",
-        "description": "Identify provider entity, billing office, payer, plan type, and routing addresses."
+        "description": "Identify provider entity, billing office, payer, plan type, and routing addresses.",
+        "tags": [
+          "domain:debt",
+          "function:policy_lookup"
+        ]
       }
     },
     {
@@ -123,6 +145,9 @@
             "required": true,
             "description": "Most states have 3-6 year SOLs for medical debt. If unsure, ask the AI Concierge or check the state rule lookup."
           }
+        ],
+        "tags": [
+          "domain:debt"
         ]
       },
       "condition_field": "within_sol",
@@ -136,7 +161,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Time-Barred Debt Defense",
-        "description": "Generate cease-collection letter citing expired SOL."
+        "description": "Generate cease-collection letter citing expired SOL.",
+        "tags": [
+          "domain:debt",
+          "function:document_collection"
+        ]
       }
     },
     {
@@ -144,56 +173,80 @@
       "type": "ACTION",
       "metadata": {
         "label": "Full Audit Battery",
-        "description": "Run all audits in parallel: duplicates, unbundling, upcoding, CPT/HCPCS validity, charge master comparison, contractual adjustments, NSA, COB, timely filing."
+        "description": "Run all audits in parallel: duplicates, unbundling, upcoding, CPT/HCPCS validity, charge master comparison, contractual adjustments, NSA, COB, timely filing.",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_duplicates",
       "type": "ACTION",
       "metadata": {
-        "label": "Duplicate/Unbundled Audit"
+        "label": "Duplicate/Unbundled Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_upcoding",
       "type": "ACTION",
       "metadata": {
-        "label": "Upcoding Audit"
+        "label": "Upcoding Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_chargemaster",
       "type": "ACTION",
       "metadata": {
-        "label": "Chargemaster vs Reasonable Rate Audit"
+        "label": "Chargemaster vs Reasonable Rate Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_nsa",
       "type": "ACTION",
       "metadata": {
-        "label": "No Surprises Act Audit"
+        "label": "No Surprises Act Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_cob",
       "type": "ACTION",
       "metadata": {
-        "label": "Coordination of Benefits Audit"
+        "label": "Coordination of Benefits Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "audit_timely",
       "type": "ACTION",
       "metadata": {
-        "label": "Timely Filing Audit"
+        "label": "Timely Filing Audit",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "consolidate_findings",
       "type": "ACTION",
       "metadata": {
-        "label": "Consolidate Findings"
+        "label": "Consolidate Findings",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
@@ -209,6 +262,9 @@
             "required": true,
             "description": "Enter 0 if no violations were found. Common violations: balance billing, NSA violations, duplicate charges."
           }
+        ],
+        "tags": [
+          "domain:debt"
         ]
       },
       "condition_field": "violations_count",
@@ -230,6 +286,9 @@
             "required": true,
             "description": "Hardship triggers: unable to afford basic needs, recent job loss, disability, on public benefits."
           }
+        ],
+        "tags": [
+          "domain:debt"
         ]
       },
       "condition_field": "hardship_indicated",
@@ -242,14 +301,21 @@
       "id": "hardship_negotiation",
       "type": "ACTION",
       "metadata": {
-        "label": "Hardship Negotiation Letter"
+        "label": "Hardship Negotiation Letter",
+        "tags": [
+          "domain:debt",
+          "function:drafting"
+        ]
       }
     },
     {
       "id": "payment_plan_setup",
       "type": "ACTION",
       "metadata": {
-        "label": "Payment Plan Setup"
+        "label": "Payment Plan Setup",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
@@ -257,14 +323,22 @@
       "type": "ACTION",
       "metadata": {
         "label": "Generate Dispute Letter",
-        "description": "Draft dispute letter citing each violation with statutory references."
+        "description": "Draft dispute letter citing each violation with statutory references.",
+        "tags": [
+          "domain:debt",
+          "function:drafting"
+        ]
       }
     },
     {
       "id": "counselor_qa",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Counselor QA Review"
+        "label": "Counselor QA Review",
+        "tags": [
+          "domain:debt",
+          "function:approval"
+        ]
       }
     },
     {
@@ -272,7 +346,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Transmit Dispute",
-        "description": "Send via certified mail, fax, and provider portal with delivery confirmation."
+        "description": "Send via certified mail, fax, and provider portal with delivery confirmation.",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
@@ -280,14 +357,20 @@
       "type": "ACTION",
       "metadata": {
         "label": "Response Wait State",
-        "description": "30-day SLA timer for provider/payer response."
+        "description": "30-day SLA timer for provider/payer response.",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "response_received",
       "type": "CONDITION",
       "metadata": {
-        "label": "Response Received?"
+        "label": "Response Received?",
+        "tags": [
+          "domain:debt"
+        ]
       },
       "condition_field": "response_status",
       "condition_operator": "in",
@@ -304,7 +387,11 @@
       "id": "negotiation_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Negotiation Router"
+        "label": "Negotiation Router",
+        "tags": [
+          "domain:debt",
+          "function:negotiation"
+        ]
       },
       "condition_field": "response_status",
       "condition_operator": "==",
@@ -317,7 +404,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Negotiation Round",
-        "description": "Counter-offer or supplemental dispute. Loop up to 3 rounds."
+        "description": "Counter-offer or supplemental dispute. Loop up to 3 rounds.",
+        "tags": [
+          "domain:debt",
+          "function:negotiation"
+        ]
       }
     },
     {
@@ -333,6 +424,10 @@
             "required": true,
             "description": "Enter 0 for the first round. Up to 3 rounds are allowed before escalation."
           }
+        ],
+        "tags": [
+          "domain:debt",
+          "function:negotiation"
         ]
       },
       "condition_field": "negotiation_round_count",
@@ -346,14 +441,22 @@
       "type": "ACTION",
       "metadata": {
         "label": "Escalation Router",
-        "description": "Route to IL AG, CFPB, state insurance dept, IL Medical Debt Relief Program, or Guild attorney."
+        "description": "Route to IL AG, CFPB, state insurance dept, IL Medical Debt Relief Program, or Guild attorney.",
+        "tags": [
+          "domain:debt",
+          "function:escalation"
+        ]
       }
     },
     {
       "id": "il_medical_debt_relief",
       "type": "ACTION",
       "metadata": {
-        "label": "IL Medical Debt Relief Program Submission"
+        "label": "IL Medical Debt Relief Program Submission",
+        "tags": [
+          "domain:debt",
+          "function:submission"
+        ]
       }
     },
     {
@@ -361,14 +464,20 @@
       "type": "ACTION",
       "metadata": {
         "label": "Credit Bureau Dispute",
-        "description": "File disputes with Equifax, Experian, TransUnion under FCRA and CFPB medical debt rule."
+        "description": "File disputes with Equifax, Experian, TransUnion under FCRA and CFPB medical debt rule.",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "credit_bureau_outcome",
       "type": "ACTION",
       "metadata": {
-        "label": "Credit Bureau Outcome Capture"
+        "label": "Credit Bureau Outcome Capture",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
@@ -376,14 +485,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Savings Ledger",
-        "description": "Record dollars disputed, dollars eliminated, dollars remaining, hours saved."
+        "description": "Record dollars disputed, dollars eliminated, dollars remaining, hours saved.",
+        "tags": [
+          "domain:debt"
+        ]
       }
     },
     {
       "id": "patient_notification",
       "type": "ACTION",
       "metadata": {
-        "label": "Patient Notification"
+        "label": "Patient Notification",
+        "tags": [
+          "domain:debt",
+          "function:notification"
+        ]
       }
     },
     {
@@ -399,6 +515,9 @@
             "required": true,
             "description": "Enter 0 if the debt is fully resolved."
           }
+        ],
+        "tags": [
+          "domain:debt"
         ]
       },
       "condition_field": "remaining_balance",
@@ -411,7 +530,11 @@
       "id": "case_close_success",
       "type": "ACTION",
       "metadata": {
-        "label": "Case Close: Success"
+        "label": "Case Close: Success",
+        "tags": [
+          "domain:debt",
+          "function:closeout"
+        ]
       }
     }
   ],

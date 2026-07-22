@@ -35,6 +35,10 @@
           "What name should I use if the bill is in a different one?",
           "Do we need the patient's ID or insurance card now?",
           "What if the patient doesn't have a phone?"
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:intake"
         ]
       }
     },
@@ -65,6 +69,10 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:identity_verification"
         ]
       }
     },
@@ -82,6 +90,10 @@
           "How long is the HIPAA authorization good for?",
           "Can the patient revoke consent later?",
           "Do we need a separate form for advocacy?"
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:consent"
         ]
       }
     },
@@ -89,7 +101,11 @@
       "id": "consent_check",
       "type": "CONDITION",
       "metadata": {
-        "label": "Consent Granted?"
+        "label": "Consent Granted?",
+        "tags": [
+          "domain:charity_care",
+          "function:consent"
+        ]
       },
       "condition_field": "consent_granted",
       "condition_operator": "==",
@@ -127,6 +143,10 @@
           "Can we move forward without a pay stub?",
           "What if the patient is self-employed?",
           "How recent do the documents need to be?"
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:document_collection"
         ]
       }
     },
@@ -134,7 +154,11 @@
       "id": "documents_complete",
       "type": "CONDITION",
       "metadata": {
-        "label": "Documents Complete?"
+        "label": "Documents Complete?",
+        "tags": [
+          "domain:charity_care",
+          "function:document_collection"
+        ]
       },
       "condition_field": "documents_complete",
       "condition_operator": "==",
@@ -147,14 +171,22 @@
       "type": "ACTION",
       "metadata": {
         "label": "Document Follow-Up",
-        "description": "SMS/email reminder to patient; pause case with SLA timer (7 days)."
+        "description": "SMS/email reminder to patient; pause case with SLA timer (7 days).",
+        "tags": [
+          "domain:charity_care",
+          "function:document_collection"
+        ]
       }
     },
     {
       "id": "document_followup_timer",
       "type": "CONDITION",
       "metadata": {
-        "label": "Documents Received in 7 Days?"
+        "label": "Documents Received in 7 Days?",
+        "tags": [
+          "domain:charity_care",
+          "function:document_collection"
+        ]
       },
       "condition_field": "documents_complete",
       "condition_operator": "==",
@@ -167,7 +199,11 @@
       "type": "HANDOFF",
       "metadata": {
         "label": "Navigator Manual Outreach",
-        "description": "Local CEN attempts in-person or phone outreach."
+        "description": "Local CEN attempts in-person or phone outreach.",
+        "tags": [
+          "domain:charity_care",
+          "function:escalation"
+        ]
       }
     },
     {
@@ -175,7 +211,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Hospital Policy Lookup",
-        "description": "Retrieve facility-specific charity care policy, FPL multiplier, and required forms from policy database."
+        "description": "Retrieve facility-specific charity care policy, FPL multiplier, and required forms from policy database.",
+        "tags": [
+          "domain:charity_care",
+          "function:policy_lookup"
+        ]
       }
     },
     {
@@ -183,7 +223,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Income Verification",
-        "description": "Calculate household income vs FPL using collected documents."
+        "description": "Calculate household income vs FPL using collected documents.",
+        "tags": [
+          "domain:charity_care",
+          "function:identity_verification"
+        ]
       }
     },
     {
@@ -206,6 +250,10 @@
           "Does Medicaid alone qualify the patient?",
           "What if the patient is on SNAP but not Medicaid?",
           "How do I prove presumptive status?"
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:eligibility_check"
         ]
       },
       "condition_field": "presumptive_eligible",
@@ -234,6 +282,9 @@
           "What income counts toward the household total?",
           "What's the threshold for full write-off at this hospital?",
           "Do I include the spouse's income?"
+        ],
+        "tags": [
+          "domain:charity_care"
         ]
       },
       "condition_field": "income_fpl_percent",
@@ -255,6 +306,10 @@
             "required": true,
             "description": "Use the household income calculator. Enter 100 for 100% of FPL, 200 for 200%, etc."
           }
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:eligibility_check"
         ]
       },
       "condition_field": "income_fpl_percent",
@@ -267,14 +322,20 @@
       "id": "auto_app_full",
       "type": "ACTION",
       "metadata": {
-        "label": "Generate Full Charity Care Application"
+        "label": "Generate Full Charity Care Application",
+        "tags": [
+          "domain:charity_care"
+        ]
       }
     },
     {
       "id": "auto_app_partial",
       "type": "ACTION",
       "metadata": {
-        "label": "Generate Sliding Scale Application"
+        "label": "Generate Sliding Scale Application",
+        "tags": [
+          "domain:charity_care"
+        ]
       }
     },
     {
@@ -282,14 +343,22 @@
       "type": "HANDOFF",
       "metadata": {
         "label": "Route to Debt Cancellation Engine",
-        "description": "Patient ineligible for charity care; orchestrator triggers debt_cancellation_engine module."
+        "description": "Patient ineligible for charity care; orchestrator triggers debt_cancellation_engine module.",
+        "tags": [
+          "domain:charity_care",
+          "function:eligibility_check"
+        ]
       }
     },
     {
       "id": "counselor_qa",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Counselor QA Review"
+        "label": "Counselor QA Review",
+        "tags": [
+          "domain:charity_care",
+          "function:approval"
+        ]
       }
     },
     {
@@ -297,7 +366,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Submit Application",
-        "description": "Transmit application to hospital financial assistance department via portal, fax, or mail with delivery confirmation."
+        "description": "Transmit application to hospital financial assistance department via portal, fax, or mail with delivery confirmation.",
+        "tags": [
+          "domain:charity_care",
+          "function:submission"
+        ]
       }
     },
     {
@@ -313,6 +386,10 @@
             "required": true,
             "description": "Confirm the application was received by the hospital billing office."
           }
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:submission"
         ]
       },
       "condition_field": "submission_confirmed",
@@ -326,7 +403,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Retry Submission",
-        "description": "Retry up to 3 times then escalate."
+        "description": "Retry up to 3 times then escalate.",
+        "tags": [
+          "domain:charity_care",
+          "function:submission"
+        ]
       }
     },
     {
@@ -334,7 +415,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Status Poll Loop",
-        "description": "Poll hospital weekly for determination (max 60 days)."
+        "description": "Poll hospital weekly for determination (max 60 days).",
+        "tags": [
+          "domain:charity_care",
+          "function:tracking"
+        ]
       }
     },
     {
@@ -367,6 +452,10 @@
               }
             ]
           }
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:tracking"
         ]
       },
       "condition_field": "determination_status",
@@ -384,7 +473,11 @@
       "id": "determination_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Determination Router"
+        "label": "Determination Router",
+        "tags": [
+          "domain:charity_care",
+          "function:tracking"
+        ]
       },
       "condition_field": "determination_status",
       "condition_operator": "==",
@@ -403,6 +496,10 @@
           "What new evidence can we add?",
           "How often do appeals get overturned?",
           "What happens if we don't appeal?"
+        ],
+        "tags": [
+          "domain:charity_care",
+          "function:approval"
         ]
       }
     },
@@ -411,7 +508,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "File Charity Care Appeal",
-        "description": "Draft and submit appeal with additional documentation."
+        "description": "Draft and submit appeal with additional documentation.",
+        "tags": [
+          "domain:charity_care",
+          "function:document_collection"
+        ]
       }
     },
     {
@@ -440,6 +541,9 @@
               }
             ]
           }
+        ],
+        "tags": [
+          "domain:charity_care"
         ]
       },
       "condition_field": "appeal_status",
@@ -453,7 +557,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Escalation Router",
-        "description": "Route to IL AG Hospital Uninsured Patient Discount Act enforcement, CFPB, or state regulator."
+        "description": "Route to IL AG Hospital Uninsured Patient Discount Act enforcement, CFPB, or state regulator.",
+        "tags": [
+          "domain:charity_care",
+          "function:escalation"
+        ]
       }
     },
     {
@@ -461,7 +569,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Account Reconciliation",
-        "description": "Post charity care write-off against patient account; capture remaining balance."
+        "description": "Post charity care write-off against patient account; capture remaining balance.",
+        "tags": [
+          "domain:charity_care",
+          "function:reconciliation"
+        ]
       }
     },
     {
@@ -469,7 +581,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Outcome Capture",
-        "description": "Record dollars written off, balance remaining, effective date, hospital, KPI tags."
+        "description": "Record dollars written off, balance remaining, effective date, hospital, KPI tags.",
+        "tags": [
+          "domain:charity_care"
+        ]
       }
     },
     {
@@ -477,7 +592,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Patient Notification",
-        "description": "SMS, email, and voice notification of result in patient's preferred language."
+        "description": "SMS, email, and voice notification of result in patient's preferred language.",
+        "tags": [
+          "domain:charity_care",
+          "function:notification"
+        ]
       }
     },
     {
@@ -493,6 +612,9 @@
             "required": true,
             "description": "Enter 0 if the bill is fully resolved."
           }
+        ],
+        "tags": [
+          "domain:charity_care"
         ]
       },
       "condition_field": "remaining_balance",
@@ -506,7 +628,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Case Close: Success",
-        "description": "Close case with reason code RESOLVED_CHARITY_CARE."
+        "description": "Close case with reason code RESOLVED_CHARITY_CARE.",
+        "tags": [
+          "domain:charity_care",
+          "function:closeout"
+        ]
       }
     },
     {
@@ -514,7 +640,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Case Close: No Consent",
-        "description": "Close case with reason code NO_CONSENT."
+        "description": "Close case with reason code NO_CONSENT.",
+        "tags": [
+          "domain:charity_care",
+          "function:consent"
+        ]
       }
     }
   ],

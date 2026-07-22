@@ -29,6 +29,10 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:insurance_appeal",
+          "function:intake"
         ]
       }
     },
@@ -40,7 +44,11 @@
         "description": "Authorization of Representative form for payer.",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "tags": [
+          "domain:insurance_appeal",
+          "function:consent"
+        ]
       }
     },
     {
@@ -70,6 +78,10 @@
             "type": "file",
             "required": false
           }
+        ],
+        "tags": [
+          "domain:insurance_appeal",
+          "function:intake"
         ]
       }
     },
@@ -78,7 +90,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Deadline Tracker",
-        "description": "Calculate appeal deadline (typically 180 days for ERISA, varies for Medicare/Medicaid)."
+        "description": "Calculate appeal deadline (typically 180 days for ERISA, varies for Medicare/Medicaid).",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:calculation"
+        ]
       }
     },
     {
@@ -94,6 +110,9 @@
             "required": true,
             "description": "Found on the denial letter. Most insurers give 30, 60, or 180 days from the date of denial."
           }
+        ],
+        "tags": [
+          "domain:insurance_appeal"
         ]
       },
       "condition_field": "days_remaining",
@@ -106,7 +125,10 @@
       "id": "good_cause_extension",
       "type": "ACTION",
       "metadata": {
-        "label": "Good Cause Extension Request"
+        "label": "Good Cause Extension Request",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
@@ -114,14 +136,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Denial Classification",
-        "description": "Classify into: medical_necessity, prior_auth, experimental, out_of_network, timely_filing, eligibility, duplicate, missing_info, non_covered, step_therapy, formulary, coding_error."
+        "description": "Classify into: medical_necessity, prior_auth, experimental, out_of_network, timely_filing, eligibility, duplicate, missing_info, non_covered, step_therapy, formulary, coding_error.",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:eligibility_check"
+        ]
       }
     },
     {
       "id": "denial_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Denial Type Router"
+        "label": "Denial Type Router",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       },
       "condition_field": "denial_type",
       "condition_operator": "switch",
@@ -159,14 +188,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Clinical Evidence Retrieval",
-        "description": "Pull peer-reviewed literature, clinical guidelines (NCCN, ACC, AHA), medical records."
+        "description": "Pull peer-reviewed literature, clinical guidelines (NCCN, ACC, AHA), medical records.",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "physician_letter_request",
       "type": "ACTION",
       "metadata": {
-        "label": "Physician Letter of Medical Necessity Request"
+        "label": "Physician Letter of Medical Necessity Request",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:drafting"
+        ]
       }
     },
     {
@@ -182,6 +218,10 @@
             "required": true,
             "description": "A physician letter strengthens medical-necessity appeals significantly."
           }
+        ],
+        "tags": [
+          "domain:insurance_appeal",
+          "function:drafting"
         ]
       },
       "condition_field": "physician_letter_received",
@@ -194,84 +234,125 @@
       "id": "physician_followup",
       "type": "ACTION",
       "metadata": {
-        "label": "Physician Office Follow-Up"
+        "label": "Physician Office Follow-Up",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "prior_auth_evidence",
       "type": "ACTION",
       "metadata": {
-        "label": "Prior Auth Evidence Pack"
+        "label": "Prior Auth Evidence Pack",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "experimental_evidence",
       "type": "ACTION",
       "metadata": {
-        "label": "Experimental/Investigational Evidence Pack"
+        "label": "Experimental/Investigational Evidence Pack",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "nsa_check",
       "type": "ACTION",
       "metadata": {
-        "label": "No Surprises Act Check & IDR Routing"
+        "label": "No Surprises Act Check & IDR Routing",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "timely_filing_defense",
       "type": "ACTION",
       "metadata": {
-        "label": "Timely Filing Defense"
+        "label": "Timely Filing Defense",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "eligibility_defense",
       "type": "ACTION",
       "metadata": {
-        "label": "Eligibility Defense"
+        "label": "Eligibility Defense",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:eligibility_check"
+        ]
       }
     },
     {
       "id": "duplicate_defense",
       "type": "ACTION",
       "metadata": {
-        "label": "Duplicate Claim Defense"
+        "label": "Duplicate Claim Defense",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "info_resubmit",
       "type": "ACTION",
       "metadata": {
-        "label": "Missing Info Resubmission"
+        "label": "Missing Info Resubmission",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:submission"
+        ]
       }
     },
     {
       "id": "benefit_check",
       "type": "ACTION",
       "metadata": {
-        "label": "Benefit Coverage Verification"
+        "label": "Benefit Coverage Verification",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:identity_verification"
+        ]
       }
     },
     {
       "id": "step_therapy_defense",
       "type": "ACTION",
       "metadata": {
-        "label": "Step Therapy Override Request"
+        "label": "Step Therapy Override Request",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "formulary_exception",
       "type": "ACTION",
       "metadata": {
-        "label": "Formulary Exception Request"
+        "label": "Formulary Exception Request",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:escalation"
+        ]
       }
     },
     {
       "id": "coding_correction",
       "type": "ACTION",
       "metadata": {
-        "label": "Coding Correction & Resubmit"
+        "label": "Coding Correction & Resubmit",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:submission"
+        ]
       }
     },
     {
@@ -281,7 +362,10 @@
         "label": "Draft Appeal Letter",
         "description": "Generate a plain-language appeal letter from the case details. A counselor reviews and approves it before it is sent.",
         "action_kind": "generate",
-        "tags": ["function:drafting", "domain:insurance_appeal"],
+        "tags": [
+          "function:drafting",
+          "domain:insurance_appeal"
+        ],
         "input_schema": [
           {
             "key": "patient_name",
@@ -300,7 +384,10 @@
         "generate": {
           "output_kind": "appeal_letter",
           "prompt": "Write a formal but plain-language health-insurance appeal letter for patient {patient_name}. The claim was denied for this reason: {denial_reason}. Argue for reconsideration on the grounds of medical necessity, reference the patient's right to appeal, and keep it under one page at an 8th-grade reading level. Do not invent facts not provided.",
-          "input_fields": ["patient_name", "denial_reason"],
+          "input_fields": [
+            "patient_name",
+            "denial_reason"
+          ],
           "prompt_version": "1.0",
           "requires_approval": true
         }
@@ -310,7 +397,11 @@
       "id": "counselor_qa",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Counselor QA Review"
+        "label": "Counselor QA Review",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:approval"
+        ]
       }
     },
     {
@@ -318,14 +409,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Submit Appeal",
-        "description": "Submit via payer portal, certified mail, and fax with delivery proof."
+        "description": "Submit via payer portal, certified mail, and fax with delivery proof.",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:submission"
+        ]
       }
     },
     {
       "id": "appeal_level_tag",
       "type": "ACTION",
       "metadata": {
-        "label": "Tag Appeal Level (L1/L2/External/State)"
+        "label": "Tag Appeal Level (L1/L2/External/State)",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
@@ -333,14 +431,20 @@
       "type": "ACTION",
       "metadata": {
         "label": "Response Wait State",
-        "description": "Pre-service: 30 days. Post-service: 60 days. Urgent: 72 hours."
+        "description": "Pre-service: 30 days. Post-service: 60 days. Urgent: 72 hours.",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "response_received",
       "type": "CONDITION",
       "metadata": {
-        "label": "Response Received?"
+        "label": "Response Received?",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       },
       "condition_field": "appeal_response",
       "condition_operator": "in",
@@ -357,7 +461,10 @@
       "id": "appeal_outcome_router",
       "type": "CONDITION",
       "metadata": {
-        "label": "Outcome Router"
+        "label": "Outcome Router",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       },
       "condition_field": "appeal_response",
       "condition_operator": "==",
@@ -369,7 +476,10 @@
       "id": "next_level_decision",
       "type": "CONDITION",
       "metadata": {
-        "label": "Next Appeal Level Available?"
+        "label": "Next Appeal Level Available?",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       },
       "condition_field": "next_level",
       "condition_operator": "in",
@@ -386,21 +496,31 @@
       "id": "escalate_level",
       "type": "ACTION",
       "metadata": {
-        "label": "Escalate to Next Appeal Level"
+        "label": "Escalate to Next Appeal Level",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:escalation"
+        ]
       }
     },
     {
       "id": "external_review",
       "type": "ACTION",
       "metadata": {
-        "label": "External Independent Review (IRO)"
+        "label": "External Independent Review (IRO)",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "state_complaint",
       "type": "ACTION",
       "metadata": {
-        "label": "State Insurance Department Complaint"
+        "label": "State Insurance Department Complaint",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
@@ -408,7 +528,11 @@
       "type": "HANDOFF",
       "metadata": {
         "label": "Guild Attorney Referral",
-        "description": "Refer to FairClaims Guild attorney for ERISA litigation or bad faith claim."
+        "description": "Refer to FairClaims Guild attorney for ERISA litigation or bad faith claim.",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:escalation"
+        ]
       }
     },
     {
@@ -416,14 +540,22 @@
       "type": "ACTION",
       "metadata": {
         "label": "Claim Resubmission to Provider",
-        "description": "Notify provider to resubmit overturned claim for payment."
+        "description": "Notify provider to resubmit overturned claim for payment.",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:submission"
+        ]
       }
     },
     {
       "id": "payment_confirmation",
       "type": "ACTION",
       "metadata": {
-        "label": "Payment Confirmation Tracking"
+        "label": "Payment Confirmation Tracking",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:tracking"
+        ]
       }
     },
     {
@@ -431,21 +563,32 @@
       "type": "ACTION",
       "metadata": {
         "label": "Outcome Capture",
-        "description": "Record overturned/upheld, dollars recovered, days to resolution."
+        "description": "Record overturned/upheld, dollars recovered, days to resolution.",
+        "tags": [
+          "domain:insurance_appeal"
+        ]
       }
     },
     {
       "id": "patient_notification",
       "type": "ACTION",
       "metadata": {
-        "label": "Patient Notification"
+        "label": "Patient Notification",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:notification"
+        ]
       }
     },
     {
       "id": "case_close",
       "type": "ACTION",
       "metadata": {
-        "label": "Case Close"
+        "label": "Case Close",
+        "tags": [
+          "domain:insurance_appeal",
+          "function:closeout"
+        ]
       }
     }
   ],

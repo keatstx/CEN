@@ -30,6 +30,9 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:orchestration"
         ]
       }
     },
@@ -59,6 +62,10 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:orchestration",
+          "function:identity_verification"
         ]
       }
     },
@@ -70,7 +77,11 @@
         "description": "Single signed consent covering all downstream modules.",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "tags": [
+          "domain:orchestration",
+          "function:consent"
+        ]
       }
     },
     {
@@ -78,7 +89,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Initialize Shared Case Object",
-        "description": "Create canonical patient/household/financial/clinical record consumed by all modules."
+        "description": "Create canonical patient/household/financial/clinical record consumed by all modules.",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -120,6 +134,10 @@
             ],
             "description": "Pick the closest match - the workflow will route from here."
           }
+        ],
+        "tags": [
+          "domain:orchestration",
+          "function:intake"
         ]
       }
     },
@@ -128,14 +146,20 @@
       "type": "ACTION",
       "metadata": {
         "label": "Triage Classifier",
-        "description": "LLM + rules engine determines which modules to invoke and in what order."
+        "description": "LLM + rules engine determines which modules to invoke and in what order.",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
       "id": "module_dispatch",
       "type": "ACTION",
       "metadata": {
-        "label": "Module Dispatch (Parallel Fan-Out)"
+        "label": "Module Dispatch (Parallel Fan-Out)",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -143,7 +167,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Invoke Charity Care Navigator",
-        "description": "Sub-DAG: charity_care_navigator v2.0"
+        "description": "Sub-DAG: charity_care_navigator v2.0",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -151,7 +178,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Invoke Debt Cancellation Engine",
-        "description": "Sub-DAG: debt_cancellation_engine v2.0"
+        "description": "Sub-DAG: debt_cancellation_engine v2.0",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -159,7 +189,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Invoke Insurance Appeal Assistant",
-        "description": "Sub-DAG: insurance_appeal_assistant v2.0"
+        "description": "Sub-DAG: insurance_appeal_assistant v2.0",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -167,7 +200,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Invoke Benefits Enrollment Navigator",
-        "description": "Sub-DAG: benefits_enrollment_navigator v2.0"
+        "description": "Sub-DAG: benefits_enrollment_navigator v2.0",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -175,7 +211,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Invoke Community Resource Router",
-        "description": "Sub-DAG: community_resource_router v2.0"
+        "description": "Sub-DAG: community_resource_router v2.0",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -183,7 +222,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Module Status Aggregator",
-        "description": "Collect status, outcomes, and exceptions from each invoked sub-DAG."
+        "description": "Collect status, outcomes, and exceptions from each invoked sub-DAG.",
+        "tags": [
+          "domain:orchestration",
+          "function:tracking"
+        ]
       }
     },
     {
@@ -200,6 +243,9 @@
             "required": true,
             "description": "Yes if every prerequisite from upstream modules has been completed."
           }
+        ],
+        "tags": [
+          "domain:orchestration"
         ]
       },
       "condition_field": "dependencies_resolved",
@@ -212,7 +258,10 @@
       "id": "rerun_dependent_module",
       "type": "ACTION",
       "metadata": {
-        "label": "Re-Dispatch Dependent Module"
+        "label": "Re-Dispatch Dependent Module",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -228,6 +277,9 @@
             "required": true,
             "description": "Wait until each invoked module has reached a terminal state."
           }
+        ],
+        "tags": [
+          "domain:orchestration"
         ]
       },
       "condition_field": "all_modules_complete",
@@ -241,7 +293,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Module Wait State",
-        "description": "Pause orchestrator until pending module SLAs return."
+        "description": "Pause orchestrator until pending module SLAs return.",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -257,6 +312,10 @@
             "required": true,
             "description": "Enter 0 if every module finished cleanly."
           }
+        ],
+        "tags": [
+          "domain:orchestration",
+          "function:escalation"
         ]
       },
       "condition_field": "exception_count",
@@ -270,14 +329,22 @@
       "type": "HANDOFF",
       "metadata": {
         "label": "Supervisor Escalation Queue",
-        "description": "Route to CEN supervisor or Guild specialist for manual review."
+        "description": "Route to CEN supervisor or Guild specialist for manual review.",
+        "tags": [
+          "domain:orchestration",
+          "function:escalation"
+        ]
       }
     },
     {
       "id": "supervisor_resolution",
       "type": "APPROVAL",
       "metadata": {
-        "label": "Supervisor Resolution"
+        "label": "Supervisor Resolution",
+        "tags": [
+          "domain:orchestration",
+          "function:approval"
+        ]
       }
     },
     {
@@ -285,14 +352,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "KPI Rollup",
-        "description": "Aggregate dollars saved, applications approved, appeals overturned, services connected, hours saved."
+        "description": "Aggregate dollars saved, applications approved, appeals overturned, services connected, hours saved.",
+        "tags": [
+          "domain:orchestration",
+          "function:approval"
+        ]
       }
     },
     {
       "id": "audit_log_finalize",
       "type": "ACTION",
       "metadata": {
-        "label": "Audit & Compliance Log Finalize"
+        "label": "Audit & Compliance Log Finalize",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -300,7 +374,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Family Summary Generation",
-        "description": "Generate plain-language summary of all outcomes in preferred language."
+        "description": "Generate plain-language summary of all outcomes in preferred language.",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -308,14 +385,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Unified Patient Notification",
-        "description": "Single SMS, email, voice, and printed letter covering all modules."
+        "description": "Single SMS, email, voice, and printed letter covering all modules.",
+        "tags": [
+          "domain:orchestration",
+          "function:drafting"
+        ]
       }
     },
     {
       "id": "satisfaction_survey",
       "type": "ACTION",
       "metadata": {
-        "label": "Satisfaction & Trust Survey"
+        "label": "Satisfaction & Trust Survey",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -323,7 +407,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Follow-Up Scheduler",
-        "description": "30/60/90 day check-ins, redetermination dates, re-screening."
+        "description": "30/60/90 day check-ins, redetermination dates, re-screening.",
+        "tags": [
+          "domain:orchestration",
+          "function:tracking"
+        ]
       }
     },
     {
@@ -331,7 +419,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Latimer Leader Mentoring Credit",
-        "description": "Tag case to Latimer Leader's training portfolio."
+        "description": "Tag case to Latimer Leader's training portfolio.",
+        "tags": [
+          "domain:orchestration"
+        ]
       }
     },
     {
@@ -339,7 +430,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Master Case Close",
-        "description": "Close case with reason code RESOLVED, PARTIAL, or ESCALATED."
+        "description": "Close case with reason code RESOLVED, PARTIAL, or ESCALATED.",
+        "tags": [
+          "domain:orchestration",
+          "function:escalation"
+        ]
       }
     }
   ],

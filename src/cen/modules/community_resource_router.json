@@ -29,6 +29,10 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "domain:sdoh",
+          "function:intake"
         ]
       }
     },
@@ -39,7 +43,11 @@
         "label": "Consent & Data Sharing",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "tags": [
+          "domain:sdoh",
+          "function:consent"
+        ]
       }
     },
     {
@@ -80,6 +88,9 @@
             "required": true,
             "description": "Used to find local resources."
           }
+        ],
+        "tags": [
+          "domain:sdoh"
         ]
       }
     },
@@ -87,119 +98,185 @@
       "id": "needs_aggregation",
       "type": "ACTION",
       "metadata": {
-        "label": "Needs Aggregation & Prioritization"
+        "label": "Needs Aggregation & Prioritization",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
       "id": "domain_router",
       "type": "ACTION",
       "metadata": {
-        "label": "Domain Router (Parallel Fan-Out)"
+        "label": "Domain Router (Parallel Fan-Out)",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
       "id": "housing",
       "type": "ACTION",
       "metadata": {
-        "label": "Housing Domain Lookup"
+        "label": "Housing Domain Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "food",
       "type": "ACTION",
       "metadata": {
-        "label": "Food Domain Lookup"
+        "label": "Food Domain Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "utilities",
       "type": "ACTION",
       "metadata": {
-        "label": "Utilities (LIHEAP) Lookup"
+        "label": "Utilities (LIHEAP) Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "transport",
       "type": "ACTION",
       "metadata": {
-        "label": "Transportation Lookup"
+        "label": "Transportation Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "childcare",
       "type": "ACTION",
       "metadata": {
-        "label": "Childcare Lookup"
+        "label": "Childcare Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "employment",
       "type": "ACTION",
       "metadata": {
-        "label": "Employment & Workforce Lookup"
+        "label": "Employment & Workforce Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "legal",
       "type": "ACTION",
       "metadata": {
-        "label": "Legal Aid Lookup"
+        "label": "Legal Aid Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "behavioral_health",
       "type": "ACTION",
       "metadata": {
-        "label": "Behavioral Health Lookup"
+        "label": "Behavioral Health Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "substance_use",
       "type": "ACTION",
       "metadata": {
-        "label": "Substance Use Treatment Lookup"
+        "label": "Substance Use Treatment Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "ipv",
       "type": "ACTION",
       "metadata": {
-        "label": "Domestic Violence Safety Lookup"
+        "label": "Domestic Violence Safety Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "immigration",
       "type": "ACTION",
       "metadata": {
-        "label": "Immigration Services Lookup"
+        "label": "Immigration Services Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "veterans",
       "type": "ACTION",
       "metadata": {
-        "label": "Veterans Services Lookup"
+        "label": "Veterans Services Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "prescription",
       "type": "ACTION",
       "metadata": {
-        "label": "Prescription Assistance Lookup"
+        "label": "Prescription Assistance Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "dental_vision",
       "type": "ACTION",
       "metadata": {
-        "label": "Dental & Vision Lookup"
+        "label": "Dental & Vision Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
       "id": "tech_access",
       "type": "ACTION",
       "metadata": {
-        "label": "Technology Access Lookup"
+        "label": "Technology Access Lookup",
+        "tags": [
+          "domain:sdoh",
+          "function:policy_lookup"
+        ]
       }
     },
     {
@@ -207,7 +284,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Resource Database Query",
-        "description": "Query findhelp/Aunt Bertha, 211, NowPow, Unite Us, and ThriveAI local index by ZIP."
+        "description": "Query findhelp/Aunt Bertha, 211, NowPow, Unite Us, and ThriveAI local index by ZIP.",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
@@ -215,14 +295,21 @@
       "type": "ACTION",
       "metadata": {
         "label": "Eligibility Filter",
-        "description": "Filter results by income, geography, age, language, insurance, immigration status."
+        "description": "Filter results by income, geography, age, language, insurance, immigration status.",
+        "tags": [
+          "domain:sdoh",
+          "function:eligibility_check"
+        ]
       }
     },
     {
       "id": "consolidate_resources",
       "type": "ACTION",
       "metadata": {
-        "label": "Consolidate Resource Plan"
+        "label": "Consolidate Resource Plan",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
@@ -230,7 +317,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Warm Handoff Submission",
-        "description": "Submit electronic referrals via Unite Us / NowPow / direct API."
+        "description": "Submit electronic referrals via Unite Us / NowPow / direct API.",
+        "tags": [
+          "domain:sdoh",
+          "function:submission"
+        ]
       }
     },
     {
@@ -238,7 +329,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Appointment Scheduling",
-        "description": "Book intake appointments where supported."
+        "description": "Book intake appointments where supported.",
+        "tags": [
+          "domain:sdoh",
+          "function:intake"
+        ]
       }
     },
     {
@@ -253,6 +348,9 @@
             "type": "boolean",
             "required": true
           }
+        ],
+        "tags": [
+          "domain:sdoh"
         ]
       },
       "condition_field": "patient_confirmed",
@@ -265,7 +363,11 @@
       "id": "navigator_outreach",
       "type": "HANDOFF",
       "metadata": {
-        "label": "Navigator Outreach"
+        "label": "Navigator Outreach",
+        "tags": [
+          "domain:sdoh",
+          "function:escalation"
+        ]
       }
     },
     {
@@ -273,7 +375,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Service Follow-Up",
-        "description": "7-day, 30-day, 90-day check-ins."
+        "description": "7-day, 30-day, 90-day check-ins.",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
@@ -289,6 +394,9 @@
             "required": true,
             "description": "Mark Yes once the patient has actually engaged with the resource (called, applied, or received help)."
           }
+        ],
+        "tags": [
+          "domain:sdoh"
         ]
       },
       "condition_field": "service_received",
@@ -302,7 +410,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Barrier Resolution",
-        "description": "Identify why service was not received; alternate referral."
+        "description": "Identify why service was not received; alternate referral.",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
@@ -318,6 +429,9 @@
             "required": true,
             "description": "Enter 0 for first attempt. Up to 2 retries are allowed before escalation."
           }
+        ],
+        "tags": [
+          "domain:sdoh"
         ]
       },
       "condition_field": "retry_count",
@@ -330,7 +444,11 @@
       "id": "guild_escalation",
       "type": "HANDOFF",
       "metadata": {
-        "label": "Guild Escalation"
+        "label": "Guild Escalation",
+        "tags": [
+          "domain:sdoh",
+          "function:escalation"
+        ]
       }
     },
     {
@@ -338,7 +456,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Outcome Capture",
-        "description": "Need met/partial/unmet, dollar value, service received date."
+        "description": "Need met/partial/unmet, dollar value, service received date.",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
@@ -346,21 +467,32 @@
       "type": "ACTION",
       "metadata": {
         "label": "Re-Screening Scheduler",
-        "description": "Schedule SDOH re-screen at 90 or 180 days."
+        "description": "Schedule SDOH re-screen at 90 or 180 days.",
+        "tags": [
+          "domain:sdoh"
+        ]
       }
     },
     {
       "id": "patient_notification",
       "type": "ACTION",
       "metadata": {
-        "label": "Patient Notification"
+        "label": "Patient Notification",
+        "tags": [
+          "domain:sdoh",
+          "function:notification"
+        ]
       }
     },
     {
       "id": "case_close",
       "type": "ACTION",
       "metadata": {
-        "label": "Case Close"
+        "label": "Case Close",
+        "tags": [
+          "domain:sdoh",
+          "function:closeout"
+        ]
       }
     }
   ],

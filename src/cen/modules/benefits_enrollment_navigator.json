@@ -29,6 +29,9 @@
             "required": false,
             "description": "Optional - so we can follow up if needed."
           }
+        ],
+        "tags": [
+          "function:intake"
         ]
       }
     },
@@ -39,7 +42,10 @@
         "label": "Consent & ROI",
         "auto_set": {
           "consent_granted": true
-        }
+        },
+        "tags": [
+          "function:consent"
+        ]
       }
     },
     {
@@ -69,6 +75,9 @@
             "type": "boolean",
             "required": false
           }
+        ],
+        "tags": [
+          "function:document_collection"
         ]
       }
     },
@@ -85,6 +94,10 @@
             "required": true,
             "description": "Yes if the patient is 65+, has been on SSDI for 24+ months, or has ESRD/ALS."
           }
+        ],
+        "tags": [
+          "domain:medicare",
+          "function:eligibility_check"
         ]
       },
       "condition_field": "medicare_eligible",
@@ -98,7 +111,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Medicare Enrollment Path",
-        "description": "Original Medicare, Part D, Medigap, MA plan selection, LIS, MSP screening."
+        "description": "Original Medicare, Part D, Medigap, MA plan selection, LIS, MSP screening.",
+        "tags": [
+          "domain:medicare"
+        ]
       }
     },
     {
@@ -106,7 +122,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Household Composition Split",
-        "description": "Separate adults, children, pregnant members, disabled members for parallel eligibility."
+        "description": "Separate adults, children, pregnant members, disabled members for parallel eligibility.",
+        "tags": [
+          "function:eligibility_check"
+        ]
       }
     },
     {
@@ -114,7 +133,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "State Rule Lookup",
-        "description": "Load state-specific Medicaid expansion status, MAGI thresholds, non-MAGI categories, waivers."
+        "description": "Load state-specific Medicaid expansion status, MAGI thresholds, non-MAGI categories, waivers.",
+        "tags": [
+          "domain:medicaid",
+          "function:policy_lookup"
+        ]
       }
     },
     {
@@ -122,7 +145,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Document Collection",
-        "description": "Income proof, citizenship/immigration docs, residency, SSN, disability records."
+        "description": "Income proof, citizenship/immigration docs, residency, SSN, disability records.",
+        "tags": [
+          "function:document_collection"
+        ]
       }
     },
     {
@@ -130,7 +156,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "APTC/CSR Subsidy Calculator",
-        "description": "Real PTC and CSR math based on FPL, age, region, plan benchmark."
+        "description": "Real PTC and CSR math based on FPL, age, region, plan benchmark.",
+        "tags": [
+          "domain:marketplace",
+          "function:calculation"
+        ]
       }
     },
     {
@@ -138,7 +168,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Eligibility Matrix",
-        "description": "Run each household member through Medicaid, CHIP, ACA, Medicare Savings, ABD waivers."
+        "description": "Run each household member through Medicaid, CHIP, ACA, Medicare Savings, ABD waivers.",
+        "tags": [
+          "domain:medicare",
+          "function:eligibility_check"
+        ]
       }
     },
     {
@@ -154,6 +188,10 @@
             "required": true,
             "description": "Enter 0 if no one qualifies."
           }
+        ],
+        "tags": [
+          "domain:medicaid",
+          "function:eligibility_check"
         ]
       },
       "condition_field": "medicaid_eligible_count",
@@ -167,7 +205,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "Medicaid Application",
-        "description": "State-specific submission (e.g., Illinois ABE) for eligible members."
+        "description": "State-specific submission (e.g., Illinois ABE) for eligible members.",
+        "tags": [
+          "domain:medicaid",
+          "function:eligibility_check"
+        ]
       }
     },
     {
@@ -183,6 +225,9 @@
             "required": true,
             "description": "Enter 0 if no children qualify."
           }
+        ],
+        "tags": [
+          "function:eligibility_check"
         ]
       },
       "condition_field": "chip_eligible_count",
@@ -211,6 +256,9 @@
             "required": true,
             "description": "Enter 0 if no one qualifies."
           }
+        ],
+        "tags": [
+          "function:eligibility_check"
         ]
       },
       "condition_field": "aca_eligible_count",
@@ -244,7 +292,10 @@
       "id": "sep_qualification",
       "type": "ACTION",
       "metadata": {
-        "label": "SEP Qualifying Event Verification"
+        "label": "SEP Qualifying Event Verification",
+        "tags": [
+          "function:identity_verification"
+        ]
       }
     },
     {
@@ -252,7 +303,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Plan Selection Engine",
-        "description": "Compare premium, deductible, network, formulary, OOP max for household needs."
+        "description": "Compare premium, deductible, network, formulary, OOP max for household needs.",
+        "tags": [
+          "domain:marketplace"
+        ]
       }
     },
     {
@@ -260,7 +314,11 @@
       "type": "ACTION",
       "metadata": {
         "label": "ACA Marketplace Application",
-        "description": "Submit via healthcare.gov or state exchange."
+        "description": "Submit via healthcare.gov or state exchange.",
+        "tags": [
+          "domain:marketplace",
+          "function:submission"
+        ]
       }
     },
     {
@@ -268,7 +326,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "No Program Match",
-        "description": "Document gap; route to community resource router and Guild."
+        "description": "Document gap; route to community resource router and Guild.",
+        "tags": [
+          "function:document_collection"
+        ]
       }
     },
     {
@@ -276,14 +337,20 @@
       "type": "ACTION",
       "metadata": {
         "label": "Submission Tracker",
-        "description": "Track each program submission with confirmation number and SLA."
+        "description": "Track each program submission with confirmation number and SLA.",
+        "tags": [
+          "function:submission"
+        ]
       }
     },
     {
       "id": "determination_wait",
       "type": "ACTION",
       "metadata": {
-        "label": "Determination Wait State"
+        "label": "Determination Wait State",
+        "tags": [
+          "function:tracking"
+        ]
       }
     },
     {
@@ -299,6 +366,9 @@
             "required": true,
             "description": "Mark Yes only after every program (Medicaid, CHIP, ACA, etc.) has responded."
           }
+        ],
+        "tags": [
+          "function:tracking"
         ]
       },
       "condition_field": "all_determinations_in",
@@ -319,6 +389,9 @@
             "type": "boolean",
             "required": true
           }
+        ],
+        "tags": [
+          "function:approval"
         ]
       },
       "condition_field": "any_denied",
@@ -331,7 +404,10 @@
       "id": "denial_appeal",
       "type": "ACTION",
       "metadata": {
-        "label": "Eligibility Denial Appeal"
+        "label": "Eligibility Denial Appeal",
+        "tags": [
+          "function:eligibility_check"
+        ]
       }
     },
     {
@@ -339,7 +415,10 @@
       "type": "ACTION",
       "metadata": {
         "label": "Enrollment Confirmation",
-        "description": "Capture effective date, member IDs, plan details."
+        "description": "Capture effective date, member IDs, plan details.",
+        "tags": [
+          "domain:marketplace"
+        ]
       }
     },
     {
@@ -354,14 +433,20 @@
       "id": "id_card_delivery",
       "type": "ACTION",
       "metadata": {
-        "label": "ID Card & Welcome Packet Tracking"
+        "label": "ID Card & Welcome Packet Tracking",
+        "tags": [
+          "function:tracking"
+        ]
       }
     },
     {
       "id": "renewal_scheduler",
       "type": "ACTION",
       "metadata": {
-        "label": "Renewal & Redetermination Scheduler"
+        "label": "Renewal & Redetermination Scheduler",
+        "tags": [
+          "function:tracking"
+        ]
       }
     },
     {
@@ -369,21 +454,31 @@
       "type": "ACTION",
       "metadata": {
         "label": "Outcome Capture",
-        "description": "Members enrolled, programs, annual subsidy value, OOP savings."
+        "description": "Members enrolled, programs, annual subsidy value, OOP savings.",
+        "tags": [
+          "domain:marketplace",
+          "function:calculation"
+        ]
       }
     },
     {
       "id": "patient_notification",
       "type": "ACTION",
       "metadata": {
-        "label": "Patient Notification"
+        "label": "Patient Notification",
+        "tags": [
+          "function:notification"
+        ]
       }
     },
     {
       "id": "case_close",
       "type": "ACTION",
       "metadata": {
-        "label": "Case Close"
+        "label": "Case Close",
+        "tags": [
+          "function:closeout"
+        ]
       }
     }
   ],
