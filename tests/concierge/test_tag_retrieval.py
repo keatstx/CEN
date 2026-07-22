@@ -34,6 +34,37 @@ class TestTagRetrieval:
         )
         assert any(c.citation.faq_id == tagged.id for c in chunks)
 
+    async def test_tag_match_marks_from_step(self, store: FAQStore):
+        await store.create(
+            question="Program overview.",
+            answer="Notes about the eligibility process.",
+            tags=["function:eligibility_check"],
+        )
+        chunks = await _retrieve_faqs(
+            question="eligibility",
+            faq_store=store,
+            module_name=None,
+            project_id=None,
+            owner_id=None,
+            boost_tags=["function:eligibility_check"],
+        )
+        assert chunks and all(c.citation.from_step for c in chunks)
+
+    async def test_no_boost_tags_means_not_from_step(self, store: FAQStore):
+        await store.create(
+            question="How do I appeal a denial?",
+            answer="File within 180 days.",
+            tags=["function:eligibility_check"],
+        )
+        chunks = await _retrieve_faqs(
+            question="how do I appeal a denial",
+            faq_store=store,
+            module_name=None,
+            project_id=None,
+            owner_id=None,
+        )
+        assert chunks and all(c.citation.from_step is False for c in chunks)
+
     async def test_faq_pin_always_surfaces(self, store: FAQStore):
         # A pinned FAQ with zero lexical overlap with the question must
         # still appear, and lead the FAQ chunks.

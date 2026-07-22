@@ -443,6 +443,10 @@ class ConciergeCitation(BaseModel):
     score: float = 0.0
     node_id: Optional[str] = None
     sop_id: Optional[str] = None
+    # True when this FAQ surfaced because it shares tags with the current
+    # step, or is pinned to it — lets the UI show a "From this step" badge
+    # (provenance, Non-Negotiable #9) distinct from a global-library hit.
+    from_step: bool = False
 
 
 class SuggestedInput(BaseModel):

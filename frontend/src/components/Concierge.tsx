@@ -401,6 +401,19 @@ function CitationLine({ citation }: { citation: ConciergeCitation }) {
       >
         {tag}
       </span>
+      {citation.from_step && (
+        <span
+          className="inline-block px-1 mr-1 rounded text-[9px] font-medium"
+          style={{
+            background: "rgba(34,197,94,0.15)",
+            border: "1px solid rgb(34,197,94)",
+            color: "var(--color-text-secondary)",
+          }}
+          title="This answer came from a FAQ scoped to the step you're on"
+        >
+          From this step
+        </span>
+      )}
       <span className="italic">{citation.question}</span>
     </div>
   );

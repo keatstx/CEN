@@ -101,7 +101,7 @@ class RetrievedChunk:
     citation: ConciergeCitation
 
 
-def _faq_chunk(faq, score: float) -> "RetrievedChunk":
+def _faq_chunk(faq, score: float, from_step: bool = False) -> "RetrievedChunk":
     return RetrievedChunk(
         text=faq.answer,
         score=float(score),
@@ -110,6 +110,7 @@ def _faq_chunk(faq, score: float) -> "RetrievedChunk":
             kind="faq",
             question=faq.question,
             score=round(float(score), 3),
+            from_step=from_step,
         ),
     )
 
@@ -133,6 +134,7 @@ async def _retrieve_faqs(
         top_k=top_k,
         boost_tags=boost_tags,
     )
+    boost_set = set(boost_tags or [])
     out: List[RetrievedChunk] = []
     seen: set[str] = set()
     # Pinned FAQs first — always surfaced on this step regardless of
@@ -142,12 +144,14 @@ async def _retrieve_faqs(
         faq = await faq_store.get(faq_id)
         if faq is not None and faq.id not in seen:
             seen.add(faq.id)
-            out.append(_faq_chunk(faq, 0.9))
+            out.append(_faq_chunk(faq, 0.9, from_step=True))
     for faq, score in matches:
         if faq.id in seen:
             continue
         seen.add(faq.id)
-        out.append(_faq_chunk(faq, score))
+        # step-scoped when the FAQ shares a tag with the current step.
+        shares_tag = bool(boost_set and set(faq.tags) & boost_set)
+        out.append(_faq_chunk(faq, score, from_step=shares_tag))
     return out
 
 

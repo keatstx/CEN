@@ -209,6 +209,7 @@ export interface ConciergeCitation {
   score: number;
   node_id: string | null;
   sop_id: string | null;
+  from_step?: boolean;
 }
 
 export interface ConciergeResponse {
