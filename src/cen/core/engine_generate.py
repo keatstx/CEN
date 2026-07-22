@@ -104,7 +104,7 @@ async def run_generate_node(
 
     for k, v in output.items():
         state.context[k] = v
-    state.node_outputs[node.id] = output
+    state.node_outputs[state.cache_key(node.id)] = output
 
     await engine._emit_node_event(
         session_id, node.id, "ACTION", "generated", state.context

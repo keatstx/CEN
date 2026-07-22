@@ -72,6 +72,10 @@ class AsyncWorkflowEngine:
         self.graph = nx.DiGraph()
         self.nodes: dict[str, AOPNode] = {}
         self.module_name: str = ""
+        # Bounded loop regions (LDCG), keyed by entry node id. Empty for
+        # a pure DAG, in which case execute() takes the unchanged
+        # topological fast path. Populated by load_aop.
+        self._loop_regions: dict = {}
         self._llm = llm
         self._event_bus = event_bus
         self._llm_semaphore = llm_semaphore
@@ -92,10 +96,18 @@ class AsyncWorkflowEngine:
             self.nodes[node.id] = node
 
         for edge in aop.edges:
-            self.graph.add_edge(edge.source, edge.target, label=edge.label)
+            self.graph.add_edge(
+                edge.source, edge.target, label=edge.label, kind=edge.kind
+            )
+
+        # Loop-aware acyclicity: a pure DAG loads as before. A cyclic
+        # graph is allowed only when every cycle is a valid bounded loop
+        # region (LDCG); anything else still raises CycleDetectedError.
+        from cen.core.engine_loops import detect_loop_regions, validate_loop_regions
 
         if not nx.is_directed_acyclic_graph(self.graph):
-            raise CycleDetectedError()
+            validate_loop_regions(self.graph, self.nodes)
+        self._loop_regions = detect_loop_regions(self.graph, self.nodes)
 
     async def execute(
         self,
@@ -126,17 +138,24 @@ class AsyncWorkflowEngine:
             approved_nodes=approved_nodes or set(),
         )
 
-        for node_id in nx.topological_sort(self.graph):
-            if node_id in state.skip_set:
-                continue
-            node = self.nodes[node_id]
+        if self._loop_regions:
+            # Loop-aware walk over the DAG skeleton; regions dispatch to
+            # the loop controller. Isolated path — pure DAGs never reach it.
+            from cen.core.engine_loops import run_with_loops
 
-            handler = _DISPATCH.get(node.type)
-            if handler is None:
-                continue
-            result = await handler(self, node, state, session_id)
-            if result is StepResult.BREAK:
-                break
+            await run_with_loops(self, state, session_id)
+        else:
+            for node_id in nx.topological_sort(self.graph):
+                if node_id in state.skip_set:
+                    continue
+                node = self.nodes[node_id]
+
+                handler = _DISPATCH.get(node.type)
+                if handler is None:
+                    continue
+                result = await handler(self, node, state, session_id)
+                if result is StepResult.BREAK:
+                    break
 
         # Persist the per-node output cache back into context so the
         # session_store round-trips it on save/resume.

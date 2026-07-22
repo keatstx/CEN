@@ -46,6 +46,16 @@ class ExecutionState:
     pending_input_fields: list[InputField] | None = None
     node_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
     approved_nodes: set[str] = field(default_factory=set)
+    # Suffix appended to the output-cache key while executing inside a
+    # bounded loop region (e.g. "#2"). Empty outside loops, so the cache
+    # key is the bare node id and non-loop behavior is byte-identical.
+    # Inside a loop, each iteration gets its own cache namespace so a
+    # node re-executes once per pass but stays idempotent on resume
+    # (Non-Negotiable #3).
+    loop_suffix: str = ""
+
+    def cache_key(self, node_id: str) -> str:
+        return f"{node_id}{self.loop_suffix}"
 
 
 # ── ACTION ──────────────────────────────────────────────────────────
@@ -57,7 +67,7 @@ async def run_action_node(
     state: ExecutionState,
     session_id: str | None,
 ) -> StepResult:
-    cached = state.node_outputs.get(node.id)
+    cached = state.node_outputs.get(state.cache_key(node.id))
     if cached is not None:
         # Replay: restore context fields without firing the LLM call.
         state.executed.append(node.id)
@@ -130,7 +140,7 @@ async def run_action_node(
             state.context[k] = v
             output[k] = v
 
-    state.node_outputs[node.id] = output
+    state.node_outputs[state.cache_key(node.id)] = output
     await engine._emit_node_event(
         session_id, node.id, "ACTION", "done", state.context
     )
@@ -146,7 +156,7 @@ async def run_condition_node(
     state: ExecutionState,
     session_id: str | None,
 ) -> StepResult:
-    cached = state.node_outputs.get(node.id)
+    cached = state.node_outputs.get(state.cache_key(node.id))
 
     # Input-collection pause (only on the first-time path).
     if cached is None:
@@ -197,7 +207,7 @@ async def run_condition_node(
         actual = state.context.get(node.condition_field or "")
         chosen = node.branches.get(actual) if actual is not None else None
         state.context[f"{node.id}_result"] = chosen
-        state.node_outputs[node.id] = {f"{node.id}_result": chosen}
+        state.node_outputs[state.cache_key(node.id)] = {f"{node.id}_result": chosen}
         await engine._emit_node_event(
             session_id, node.id, "CONDITION", f"switch:{chosen}", state.context
         )
@@ -206,7 +216,7 @@ async def run_condition_node(
 
     result = evaluate_condition(node, state.context)
     state.context[f"{node.id}_result"] = result
-    state.node_outputs[node.id] = {f"{node.id}_result": result}
+    state.node_outputs[state.cache_key(node.id)] = {f"{node.id}_result": result}
     await engine._emit_node_event(
         session_id, node.id, "CONDITION",
         "true" if result else "false", state.context,
@@ -252,7 +262,7 @@ async def run_handoff_node(
     state: ExecutionState,
     session_id: str | None,
 ) -> StepResult:
-    cached = state.node_outputs.get(node.id)
+    cached = state.node_outputs.get(state.cache_key(node.id))
     if cached is not None:
         state.executed.append(node.id)
         for k, v in cached.items():
@@ -265,7 +275,7 @@ async def run_handoff_node(
         for k, v in node.metadata.auto_set.items():
             state.context[k] = v
             handoff_output[k] = v
-    state.node_outputs[node.id] = handoff_output
+    state.node_outputs[state.cache_key(node.id)] = handoff_output
 
     # `pause_on_handoff`: when the author flagged this HANDOFF as
     # waiting on a third party, the engine pauses (case becomes
@@ -302,7 +312,7 @@ async def run_approval_node(
     state: ExecutionState,
     session_id: str | None,
 ) -> StepResult:
-    cached = state.node_outputs.get(node.id)
+    cached = state.node_outputs.get(state.cache_key(node.id))
     if cached is not None:
         # Replay without re-emitting the "approved" event.
         state.executed.append(node.id)
@@ -318,7 +328,7 @@ async def run_approval_node(
             for k, v in node.metadata.auto_set.items():
                 state.context[k] = v
                 approval_output[k] = v
-        state.node_outputs[node.id] = approval_output
+        state.node_outputs[state.cache_key(node.id)] = approval_output
         await engine._emit_node_event(
             session_id, node.id, "APPROVAL", "approved", state.context
         )
