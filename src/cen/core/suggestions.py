@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, List, Optional, Protocol
 
 from cen.core.models import ChatMessage, InputField, SuggestedInput
@@ -97,7 +98,11 @@ _NO_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# Date in common US formats: 01/15/2026, 1-15-26, January 15 2026
+# Dates: ISO (2026-01-15 — what <input type="date"> emits), US numeric
+# (01/15/2026, 1-15-26), and long (January 15 2026). All are normalized
+# to ISO YYYY-MM-DD before suggesting, since the date field can only
+# consume ISO.
+_DATE_ISO = re.compile(r"\b(\d{4}-\d{1,2}-\d{1,2})\b")
 _DATE_NUMERIC = re.compile(r"\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b")
 _DATE_LONG = re.compile(
     r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4})\b",
@@ -303,14 +308,36 @@ def _match_first_number(chunks: List[str]) -> Optional[_Match]:
 
 def _match_date(chunks: List[str]) -> Optional[_Match]:
     for chunk in chunks:
-        for pattern in (_DATE_NUMERIC, _DATE_LONG):
+        for pattern in (_DATE_ISO, _DATE_NUMERIC, _DATE_LONG):
             m = pattern.search(chunk)
-            if m:
-                return _Match(
-                    value=m.group(1),
-                    confidence=0.7,
-                    evidence=_short_excerpt(chunk, m.start(), m.end()),
-                )
+            if not m:
+                continue
+            iso = _normalize_date(m.group(1))
+            if iso is None:
+                continue
+            return _Match(
+                value=iso,  # always ISO YYYY-MM-DD — what the date field expects
+                confidence=0.7,
+                evidence=_short_excerpt(chunk, m.start(), m.end()),
+            )
+    return None
+
+
+def _normalize_date(raw: str) -> Optional[str]:
+    """Parse a matched date string into ISO YYYY-MM-DD. Handles ISO,
+    US M/D/Y (2- and 4-digit years), and long month-name forms. Returns
+    None if no known format parses (caller skips the suggestion)."""
+    cleaned = raw.strip().replace(",", "").replace(".", "")
+    for fmt in (
+        "%Y-%m-%d",
+        "%m/%d/%Y", "%m-%d-%Y",
+        "%m/%d/%y", "%m-%d-%y",
+        "%B %d %Y", "%b %d %Y",
+    ):
+        try:
+            return datetime.strptime(cleaned, fmt).date().isoformat()
+        except ValueError:
+            continue
     return None
 
 

@@ -339,6 +339,7 @@ async def answer_question(
     project_id: Optional[str] = None,
     owner_id: Optional[str] = None,
     llm: Optional[object] = None,
+    scrubber: Optional[object] = None,
     available_modules: Optional[List[str]] = None,
     # Polymorphic subject (Phase 6). When kind != "case" the case
     # parameter will be None; we ground in the alternate subject's
@@ -436,7 +437,9 @@ async def answer_question(
     # given the case's pending input fields. Independent of whether
     # we found FAQ matches — the user may have stated values mid-chat
     # that the workflow is about to ask for.
-    suggestions = _extract_suggestions(case=case, history=history)
+    suggestions = await _extract_suggestions(
+        case=case, history=history, llm=llm, scrubber=scrubber
+    )
 
     # 5) Synthesize. Prefer the LLM-grounded path; fall back to the
     # rule-based stitcher when no LLM is configured (or fails).
@@ -496,18 +499,32 @@ async def answer_question(
     return response
 
 
-def _extract_suggestions(
+async def _extract_suggestions(
     *,
     case: Optional[Session],
     history: List[ChatMessage],
+    llm: Optional[object] = None,
+    scrubber: Optional[object] = None,
 ) -> List[SuggestedInput]:
     """Run the suggestion extractor against the chat history, scoped
     to the case's currently-pending input fields. Returns [] when the
     case isn't paused for input — the navigator is mid-step and not
-    yet looking at a form."""
+    yet looking at a form.
+
+    Uses the LLM extractor when a real backend is available (it fills
+    free-text fields regex can't, e.g. patient name) and falls back to
+    the deterministic RegexExtractor for mock/no-LLM (keeps tests
+    deterministic and never sends chat to a canned backend)."""
     if not case or not case.pending_input_fields:
         return []
     schema: List[InputField] = case.pending_input_fields
+    backend = getattr(llm, "backend_name", "") if llm else ""
+    if llm is not None and "mock" not in backend.lower():
+        from cen.core.suggestions_llm import LLMExtractor
+
+        return await LLMExtractor(llm=llm, scrubber=scrubber).extract(
+            history=history, input_schema=schema
+        )
     return RegexExtractor().extract(history=history, input_schema=schema)
 
 

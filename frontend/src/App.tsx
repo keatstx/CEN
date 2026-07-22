@@ -194,6 +194,20 @@ export default function App() {
       context={conciergeContext}
       contextLabel={conciergeContextLabel}
       onAction={handleConciergeAction}
+      // Chat answers → center step: the Concierge extracts SuggestedInputs
+      // from what the user types in the right rail; merge them into the
+      // shared suggestions state that ChatLedStep/StepCard read so the
+      // center draft auto-fills. Merge (not replace) by key — an answer
+      // the extractor can't parse arrives as [] (truthy in JS) and must
+      // not wipe already-captured suggestions.
+      onSuggestionsUpdate={(incoming) =>
+        caseSession.setSuggestions((prev) => {
+          if (!incoming.length) return prev;
+          const byKey = new Map(prev.map((s) => [s.key, s]));
+          for (const s of incoming) byKey.set(s.key, s);
+          return Array.from(byKey.values());
+        })
+      }
     />
   );
 

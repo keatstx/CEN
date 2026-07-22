@@ -194,6 +194,7 @@ async def ask_concierge(
         current_node_id=ctx.current_node_id,
         owner_id=user.id,
         llm=llm,
+        scrubber=_scrubber,
         available_modules=list(engines.keys()),
         subject_kind=ctx.kind,
         subject_module_name=module_name_override,

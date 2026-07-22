@@ -127,11 +127,29 @@ def test_select_matches_option_label():
     assert s and s[0].value == "medical_necessity"
 
 
-def test_date_numeric_extracted():
+def test_date_numeric_normalized_to_iso():
+    """US M/D/Y is normalized to ISO — the only format an <input type=date>
+    can consume."""
     history = [_msg("the bill date was 03/15/2025")]
     schema = [_field("bill_date", "date")]
     s = RegexExtractor().extract(history=history, input_schema=schema)
-    assert s and s[0].value == "03/15/2025"
+    assert s and s[0].value == "2025-03-15"
+
+
+def test_date_iso_extracted():
+    """ISO input (what the date picker emits, and how DOB is typed) now
+    extracts — previously missed entirely."""
+    history = [_msg("her date of birth is 1980-05-01")]
+    schema = [_field("patient_dob", "date")]
+    s = RegexExtractor().extract(history=history, input_schema=schema)
+    assert s and s[0].value == "1980-05-01"
+
+
+def test_date_long_form_normalized_to_iso():
+    history = [_msg("the denial was dated January 15, 2026")]
+    schema = [_field("denial_date", "date")]
+    s = RegexExtractor().extract(history=history, input_schema=schema)
+    assert s and s[0].value == "2026-01-15"
 
 
 # ── Behavioral guarantees ───────────────────────────────────────────
