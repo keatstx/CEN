@@ -30,6 +30,15 @@ def _load_vocabulary() -> Dict[str, List[str]]:
         return {}
 
 
+def vocabulary() -> Dict[str, List[str]]:
+    """Public read of the tag vocabulary — facet -> known values.
+
+    The ``attribute`` facet is present with an empty list (open-ended).
+    Consumed by the authoring UI for tag autocomplete.
+    """
+    return dict(_load_vocabulary())
+
+
 def parse_tag(tag: str) -> Tuple[str, str]:
     """Split ``"facet:value"`` into (facet, value). A tag with no colon
     is treated as facet="" so callers can flag malformed tags."""

@@ -140,7 +140,13 @@ export interface AOPNodeMetadata {
   source_ref: SourceRef | null;
   params: Record<string, unknown>;
   suggested_questions?: string[] | null;
+  tags?: string[] | null;
+  faq_pin?: string[] | null;
 }
+
+// Facet -> known values, from GET /sop/tag-vocabulary. "attribute" is
+// present with an empty list (open-ended).
+export type TagVocabulary = Record<string, string[]>;
 
 export interface AOPNode {
   id: string;

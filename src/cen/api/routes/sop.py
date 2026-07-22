@@ -162,6 +162,15 @@ async def list_sops(
     return await sop_store.list(owner_id=user.id)
 
 
+@router.get("/tag-vocabulary")
+async def get_tag_vocabulary() -> dict:
+    """Facet -> known values, for the review-pane tag autocomplete.
+    Registered before /{sop_id} so the path param doesn't capture it."""
+    from cen.core.tags import vocabulary
+
+    return {"facets": vocabulary()}
+
+
 @router.get("/{sop_id}", response_model=SOPRecord)
 async def get_sop(
     sop_id: str,
@@ -363,6 +372,8 @@ class NodePatchRequest(BaseModel):
     true_next: Optional[str] = None
     false_next: Optional[str] = None
     condition_field: Optional[str] = None
+    tags: Optional[List[str]] = None
+    faq_pin: Optional[List[str]] = None
 
 
 @router.patch(
@@ -408,6 +419,10 @@ async def patch_draft_node(
         target.false_next = body.false_next or None
     if body.condition_field is not None:
         target.condition_field = body.condition_field or None
+    if body.tags is not None:
+        target.metadata.tags = body.tags or None
+    if body.faq_pin is not None:
+        target.metadata.faq_pin = body.faq_pin or None
 
     new_draft = record.draft_module.model_copy(update={"nodes": nodes})
     return await _save_draft_edit(

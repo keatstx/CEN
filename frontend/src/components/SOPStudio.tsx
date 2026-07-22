@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  getTagVocabulary,
   type DraftEditResponse,
 } from "../api";
 import type { SOPRecord } from "../types";
@@ -7,6 +8,7 @@ import type { SOPSession } from "../hooks/useSOPSession";
 import Button from "./ui/Button";
 import DraftDAG from "./sop/DraftDAG";
 import ValidationPanel from "./sop/ValidationPanel";
+import { TagEditor } from "./sop/TagEditor";
 
 interface Props {
   session: SOPSession;
@@ -174,7 +176,11 @@ function ReviewPane({
             highlightNodeId={selectedNodeId}
             onSelectIssue={setSelectedNodeId}
           />
-          <NodeTable nodes={sop.draft_module.nodes} />
+          <NodeTable
+            nodes={sop.draft_module.nodes}
+            sopId={sop.id}
+            onDraftUpdated={onDraftUpdated}
+          />
           {sop.status === "extracted" && (
             <div className="card">
               <h3 className="text-sm font-semibold mb-2">Promote to a workflow</h3>
@@ -227,7 +233,30 @@ function ReviewPane({
   );
 }
 
-function NodeTable({ nodes }: { nodes: import("../types").AOPNode[] }) {
+function NodeTable({
+  nodes,
+  sopId,
+  onDraftUpdated,
+}: {
+  nodes: import("../types").AOPNode[];
+  sopId: string;
+  onDraftUpdated: (updated: DraftEditResponse) => void;
+}) {
+  const [vocabulary, setVocabulary] = useState<import("../types").TagVocabulary>({});
+  useEffect(() => {
+    let live = true;
+    getTagVocabulary()
+      .then((res) => {
+        if (live) setVocabulary(res.facets);
+      })
+      .catch(() => {
+        /* autocomplete is a nicety; the editor still works without it */
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
   return (
     <div className="card p-0 overflow-hidden">
       <div className="px-3 py-2 border-b border-[var(--color-border)] flex items-center justify-between">
@@ -242,18 +271,24 @@ function NodeTable({ nodes }: { nodes: import("../types").AOPNode[] }) {
               <th className="text-left px-3 py-2 font-medium">ID</th>
               <th className="text-left px-3 py-2 font-medium">Type</th>
               <th className="text-left px-3 py-2 font-medium">Step</th>
-              <th className="text-left px-3 py-2 font-medium">Actor</th>
+              <th className="text-left px-3 py-2 font-medium">Tags</th>
               <th className="text-left px-3 py-2 font-medium">Source</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {nodes.map((n) => (
-              <tr key={n.id} className="hover:bg-[var(--color-bg)]">
+              <tr key={n.id} className="hover:bg-[var(--color-bg)] align-top">
                 <td className="px-3 py-2 font-mono">{n.id}</td>
                 <td className="px-3 py-2">{n.type}</td>
                 <td className="px-3 py-2">{n.metadata.label}</td>
-                <td className="px-3 py-2 text-[var(--color-text-muted)]">
-                  {n.metadata.actor || "—"}
+                <td className="px-3 py-2">
+                  <TagEditor
+                    sopId={sopId}
+                    nodeId={n.id}
+                    tags={n.metadata.tags ?? []}
+                    vocabulary={vocabulary}
+                    onDraftUpdated={onDraftUpdated}
+                  />
                 </td>
                 <td className="px-3 py-2 text-[var(--color-text-muted)] truncate max-w-[200px]">
                   {n.metadata.source_ref?.section || "—"}

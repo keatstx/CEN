@@ -126,6 +126,29 @@ async def test_patch_node_updates_label(client):
 
 
 @pytest.mark.asyncio
+async def test_patch_node_updates_tags(client):
+    sop_id = await _seed_proforma(client)
+    sop = await client.get(f"/sop/{sop_id}")
+    node_id = sop.json()["draft_module"]["nodes"][0]["id"]
+    r = await client.patch(
+        f"/sop/{sop_id}/draft/nodes/{node_id}",
+        json={"tags": ["function:intake", "domain:charity_care"]},
+    )
+    assert r.status_code == 200, r.text
+    updated = next(n for n in r.json()["draft"]["nodes"] if n["id"] == node_id)
+    assert updated["metadata"]["tags"] == ["function:intake", "domain:charity_care"]
+
+
+@pytest.mark.asyncio
+async def test_tag_vocabulary_endpoint(client):
+    r = await client.get("/sop/tag-vocabulary")
+    assert r.status_code == 200, r.text
+    facets = r.json()["facets"]
+    assert "function" in facets and "eligibility_check" in facets["function"]
+    assert "attribute" in facets  # open facet present (empty list)
+
+
+@pytest.mark.asyncio
 async def test_patch_node_404_on_unknown_id(client):
     sop_id = await _seed_proforma(client)
     r = await client.patch(

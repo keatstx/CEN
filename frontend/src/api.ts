@@ -484,12 +484,18 @@ export function patchSOPNode(
     true_next?: string;
     false_next?: string;
     condition_field?: string;
+    tags?: string[];
+    faq_pin?: string[];
   },
 ): Promise<DraftEditResponse> {
   return request<DraftEditResponse>(`/sop/${sopId}/draft/nodes/${nodeId}`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
+}
+
+export function getTagVocabulary(): Promise<{ facets: import("./types").TagVocabulary }> {
+  return request<{ facets: import("./types").TagVocabulary }>("/sop/tag-vocabulary");
 }
 
 export async function deleteSOPNode(
