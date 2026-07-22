@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from cen.core.project_store import ProjectStore
     from cen.core.session_store import SessionStore
     from cen.llm.factory import FallbackLanguageModel
+    from cen.privacy.pii_scrubber import PIIScrubber
     from cen.sop.store import SOPStore
     from cen.storage.base import StorageBackend
     from cen.telemetry.bus import AsyncEventBus
@@ -47,6 +48,7 @@ _chat_store: ChatMessageStore | None = None
 _sop_store: SOPStore | None = None
 _storage_backend: StorageBackend | None = None
 _event_bus: AsyncEventBus | None = None
+_scrubber: "PIIScrubber | None" = None
 
 
 def init_dependencies(
@@ -63,10 +65,11 @@ def init_dependencies(
     storage_backend: StorageBackend | None = None,
     event_bus: AsyncEventBus | None = None,
     llm_semaphore: "asyncio.Semaphore | None" = None,
+    scrubber: "PIIScrubber | None" = None,
 ) -> None:
     global _settings, _engines, _llm, _llm_semaphore, _session_store, _project_store
     global _audit_store, _artifact_store, _faq_store, _chat_store, _sop_store
-    global _storage_backend, _event_bus
+    global _storage_backend, _event_bus, _scrubber
     _settings = settings
     _engines = engines
     _llm = llm
@@ -80,6 +83,7 @@ def init_dependencies(
     _sop_store = sop_store
     _storage_backend = storage_backend
     _event_bus = event_bus
+    _scrubber = scrubber
 
 
 def get_settings() -> Settings:
@@ -143,6 +147,11 @@ def get_chat_store() -> "ChatMessageStore":
 
 def get_llm_semaphore():
     return _llm_semaphore
+
+
+def get_scrubber() -> "PIIScrubber":
+    assert _scrubber is not None
+    return _scrubber
 
 
 def get_current_user(

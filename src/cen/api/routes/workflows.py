@@ -6,7 +6,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 
-from cen.api.dependencies import get_engines, get_llm, get_session_store
+from cen.api.dependencies import (
+    get_engines,
+    get_llm,
+    get_scrubber,
+    get_session_store,
+)
 from cen.api.routes.cases import _save_result_back
 from cen.core.engine import AsyncWorkflowEngine
 from cen.core.exceptions import CycleDetectedError, ModuleNotFoundError, SessionNotFoundError
@@ -54,8 +59,9 @@ async def update_aop(
     aop: AOPDefinition,
     engines: dict = Depends(get_engines),
     llm=Depends(get_llm),
+    scrubber=Depends(get_scrubber),
 ):
-    engine = AsyncWorkflowEngine(llm=llm)
+    engine = AsyncWorkflowEngine(llm=llm, scrubber=scrubber)
     engine.load_aop(aop)  # raises CycleDetectedError if invalid
     engines[aop.module_name] = engine
     return {

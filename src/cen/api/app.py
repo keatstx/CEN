@@ -176,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     llm=llm_instance,
                     event_bus=event_bus,
                     llm_semaphore=llm_semaphore,
+                    scrubber=scrubber,
                 )
                 engine.load_aop(aop)
                 engines[aop.module_name] = engine
@@ -200,6 +201,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         storage_backend=storage_backend,
         event_bus=event_bus,
         llm_semaphore=llm_semaphore,
+        scrubber=scrubber,
     )
 
     # Routes

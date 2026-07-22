@@ -79,6 +79,14 @@ async def run_action_node(
         )
         return StepResult.BREAK
 
+    # GENERATE subtype: document production (delegated so engine_runtime
+    # stays under the §4.9 size bar). Cache-replay and the input-schema
+    # pause above already ran; this handles first-time generation only.
+    if node.metadata.action_kind == "generate" and node.metadata.generate:
+        from cen.core.engine_generate import run_generate_node
+
+        return await run_generate_node(engine, node, state, session_id)
+
     # First-time execution.
     state.executed.append(node.id)
     output: dict[str, Any] = {}
@@ -88,6 +96,11 @@ async def run_action_node(
         prompt = (
             llm_prompt.format(**state.context) if "{" in llm_prompt else llm_prompt
         )
+        # Scrub before the prompt reaches the LLM (Non-Negotiable #1).
+        # Previously this path sent context straight to the model; the
+        # scrubber is now injected on the engine and applied here too.
+        if engine._scrubber is not None:
+            prompt = engine._scrubber.scrub(prompt)
         if engine._llm_semaphore:
             t0 = time.monotonic()
             async with engine._llm_semaphore:

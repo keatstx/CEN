@@ -52,6 +52,67 @@ class SourceRef(BaseModel):
     excerpt: str = ""           # first ~200 chars of the source paragraph
 
 
+class GenerateSpec(BaseModel):
+    """Configures an ACTION node whose job is to *produce a document*
+    (appeal letter, dispute letter, charity-care application, …).
+
+    Selected by ``NodeMetadata.action_kind == "generate"``. The node
+    reuses the whole ACTION runtime — pause-for-input, the
+    ``__node_outputs`` idempotency cache, ``auto_set`` — so a generate
+    node fires the LLM exactly once per case (Non-Negotiable #3). The
+    document text lands in ``context[f"{node_id}_document"]`` with
+    provenance (Non-Negotiable #9); nothing is *sent* here — a
+    downstream APPROVAL gate authorizes transmission (Non-Negotiable
+    #1). ``prompt`` is a template; ``{key}`` placeholders are filled
+    from context (PII-scrubbed before assembly, Non-Negotiable #1).
+    """
+
+    output_kind: str                       # "appeal_letter" | "dispute_letter" | ...
+    prompt: str                            # template with {context_key} placeholders
+    input_fields: List[str] = Field(default_factory=list)  # context keys the template needs
+    prompt_version: str = "1.0"            # provenance
+    requires_approval: bool = True         # a downstream APPROVAL must gate any send
+
+
+class LoopSpec(BaseModel):
+    """Declared on the ENTRY node of a bounded loop region (LDCG).
+
+    The region body is the subgraph from the entry node to
+    ``exit_node``; it is itself a DAG. A ``loop_back`` edge
+    (exit_node -> entry) closes the region. The loop controller re-runs
+    the body up to ``max_iterations`` times, checking the exit
+    condition after each pass. When the cap is hit without exit, the
+    case jumps to ``on_limit_next`` (which MUST be an APPROVAL or
+    HANDOFF node) — the human-escalation trigger. Not yet honored by
+    the engine; schema lands first so authored modules validate.
+    """
+
+    exit_node: str                         # last body node; source of the loop_back edge
+    exit_condition_field: str              # context key checked after each pass
+    exit_when: str = "truthy"              # "truthy" | operator (engine_helpers set)
+    exit_value: Optional[Any] = None
+    max_iterations: int = 3                # hard cap; human-set in the Studio
+    on_limit_next: str = ""                # node to jump to on cap; APPROVAL/HANDOFF
+
+
+class AgenticTaskSpec(BaseModel):
+    """A discrete, automatable action the AI can perform at a step
+    (3c). Generalizes the GENERATE pattern once a second concrete
+    instance exists. Side-effecting tasks route through an APPROVAL
+    gate (Non-Negotiable #1) and respect the idempotency cache.
+    Schema-only today — no executor wired yet.
+    """
+
+    name: str
+    description: str = ""
+    input_schema: List[InputField] = Field(default_factory=list)
+    output_schema: List[InputField] = Field(default_factory=list)
+    trigger: str = "manual"                # "manual" | "on_node_entry" | "event"
+    side_effecting: bool = True
+    success_criteria: str = ""
+    failure_criteria: str = ""
+
+
 class NodeMetadata(BaseModel):
     label: str = ""
     description: str = ""
@@ -83,6 +144,35 @@ class NodeMetadata(BaseModel):
     # Hand-authored in the AOP JSON; null/empty falls back to a generic
     # "ask me anything about this step" affordance.
     suggested_questions: Optional[List[str]] = None
+    # --- Expansion fields (all additive / null-default; older module
+    # JSON loads unchanged since AOPDefinition sets extra="ignore"). ---
+    # action_kind discriminates ACTION subtypes without adding a fifth
+    # NodeType (CLAUDE.md §3 Non-Negotiable #5). "generate" => document
+    # production; the `generate` spec below is then required.
+    action_kind: Optional[str] = None            # "generate" | None
+    generate: Optional[GenerateSpec] = None      # present iff action_kind == "generate"
+    # loop: present on a loop-region ENTRY node only (LDCG). Schema-only
+    # until the loop engine lands.
+    loop: Optional[LoopSpec] = None
+    # tags (3b): namespaced facet tags — "function:eligibility_check",
+    # "domain:charity_care", "attribute:deadline_driven". The PRIMARY
+    # driver of step-scoped FAQ selection: FAQs sharing tags with the
+    # step are boosted in concierge retrieval. Drawn from a project-level
+    # vocabulary (see cen.core.tags); values outside it are allowed but
+    # flagged by the draft validator. Assigned structurally at SOP
+    # extraction (PHASE/type -> tags) and curated by a human before
+    # promote.
+    tags: Optional[List[str]] = None
+    # faq_pin (3b): explicit faq_ids ALWAYS surfaced on this step,
+    # regardless of tag/semantic match. The escape hatch for content
+    # that must bind to exactly one step; use sparingly — tags handle
+    # the common case. Empty/None => rely on tags.
+    faq_pin: Optional[List[str]] = None
+    # presentation_ref (3a): single pointer to a display asset
+    # (artifact_id or URL). No fidelity levels — de-scoped by design.
+    presentation_ref: Optional[str] = None
+    # tasks (3c): step-level automatable actions. Schema-only today.
+    tasks: Optional[List[AgenticTaskSpec]] = None
 
 
 class AOPNode(BaseModel):
@@ -102,6 +192,11 @@ class AOPEdge(BaseModel):
     source: str
     target: str
     label: str = ""
+    # kind discriminates a normal forward edge from a bounded loop-back
+    # edge (LDCG). "loop_back" is the only edge permitted to close a
+    # cycle; everything else stays a strict DAG. Default keeps every
+    # existing edge valid.
+    kind: str = "dag"  # "dag" | "loop_back"
 
 
 class AOPDefinition(BaseModel):
@@ -284,6 +379,10 @@ class FAQ(BaseModel):
     source_filename: str = ""
     owner_id: Optional[str] = None
     created_at: str = ""
+    # Namespaced tags matching the step tag vocabulary. FAQs sharing
+    # tags with the current step get a relevance boost in retrieval so
+    # step-scoped FAQs surface first (3b). Empty => tag-neutral.
+    tags: List[str] = Field(default_factory=list)
 
 
 class FAQCreate(BaseModel):
@@ -292,6 +391,7 @@ class FAQCreate(BaseModel):
     module_name: Optional[str] = None
     project_id: Optional[str] = None
     source_filename: str = ""
+    tags: List[str] = Field(default_factory=list)
 
 
 class ConciergeContext(BaseModel):

@@ -28,6 +28,7 @@ from cen.api.dependencies import (
     get_event_bus,
     get_llm,
     get_llm_semaphore,
+    get_scrubber,
     get_settings,
     get_sop_store,
     get_storage_backend,
@@ -452,6 +453,7 @@ async def promote_sop(
     llm=Depends(get_llm),
     event_bus: AsyncEventBus = Depends(get_event_bus),
     llm_semaphore=Depends(get_llm_semaphore),
+    scrubber=Depends(get_scrubber),
     user: User = Depends(get_current_user),
 ) -> SOPRecord:
     record = await sop_store.get(sop_id)
@@ -479,6 +481,7 @@ async def promote_sop(
             llm=llm,
             event_bus=event_bus,
             llm_semaphore=llm_semaphore,
+            scrubber=scrubber,
             requested_name=payload.module_name,
         )
     except PromotionError as exc:

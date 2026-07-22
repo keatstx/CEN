@@ -35,6 +35,7 @@ def promote_draft(
     llm,
     event_bus,
     llm_semaphore,
+    scrubber=None,
     requested_name: Optional[str] = None,
 ) -> AOPDefinition:
     """Persist `draft` to disk and register it in the live engine map.
@@ -60,7 +61,7 @@ def promote_draft(
     path.write_text(json.dumps(promoted.model_dump(), indent=2), encoding="utf-8")
 
     engine = AsyncWorkflowEngine(
-        llm=llm, event_bus=event_bus, llm_semaphore=llm_semaphore
+        llm=llm, event_bus=event_bus, llm_semaphore=llm_semaphore, scrubber=scrubber
     )
     try:
         engine.load_aop(promoted)

@@ -43,6 +43,7 @@ from cen.core.models import (
 
 if TYPE_CHECKING:
     from cen.llm.base import LanguageModel
+    from cen.privacy.pii_scrubber import PIIScrubber
     from cen.telemetry.bus import AsyncEventBus
 
 
@@ -66,6 +67,7 @@ class AsyncWorkflowEngine:
         llm: "LanguageModel | None" = None,
         event_bus: "AsyncEventBus | None" = None,
         llm_semaphore: asyncio.Semaphore | None = None,
+        scrubber: "PIIScrubber | None" = None,
     ):
         self.graph = nx.DiGraph()
         self.nodes: dict[str, AOPNode] = {}
@@ -73,6 +75,11 @@ class AsyncWorkflowEngine:
         self._llm = llm
         self._event_bus = event_bus
         self._llm_semaphore = llm_semaphore
+        # PII scrubber applied before any LLM prompt assembly
+        # (Non-Negotiable #1). Optional so mock/test engines can omit
+        # it; when None, prompts are passed through unchanged (dev/test
+        # only — production always injects one via create_app()).
+        self._scrubber = scrubber
 
     def load_aop(self, aop: AOPDefinition) -> None:
         self.graph.clear()
