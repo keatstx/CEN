@@ -1,6 +1,32 @@
-# CEN AI Concierge
+# CEN — Community Equity Navigators
 
-**Community Equity Navigators** — an AOP/DAG workflow engine that routes patients through financial assistance, insurance appeals, benefits enrollment, and community resource pathways.
+An AI Concierge platform for No Surprises Act compliance and patient financial advocacy. CEN executes human-authored **AOP/DAG workflows** that guide navigators (and, later, patients) through charity care, benefits enrollment, insurance appeals, debt cancellation, and community-resource navigation — while producing a defensible, append-only audit trail for every outcome.
+
+- **Live:** https://cen-48pm.onrender.com
+- **Deploy:** Render (single Docker service — FastAPI serves the built frontend)
+
+## What it does
+
+A FastAPI + React app with a three-panel **FlowUX** shell (left nav · center Studio · persistent AI Concierge) and five surfaces:
+
+| Surface | What a navigator does |
+|---|---|
+| **Home / Dashboard** | Bucketed case queue (needs input / waiting on patient / pending approval / done) + metrics. |
+| **Executor** | Work a case: guided Step Cards, document upload, approval gates, rewind, "Information so far", **generated documents**, and **repeating-step (loop) status**. |
+| **Workflow Map** | Read-only pan/zoom DAG viewer of any workflow. |
+| **SOP Studio** | Upload a `.docx`/`.pdf` SOP → parsed → extracted draft workflow → validate → fix → **tag** → promote to a runnable workflow. |
+| **Concierge** | Persistent right rail. Multi-source retrieval (FAQ library + current step + case history), citations, step-scoped FAQ, suggested inputs, hard medical/legal/financial guardrails. |
+
+Six built-in workflows ship in `src/cen/modules/`: `master_case_orchestrator`, `charity_care_navigator`, `insurance_appeal_assistant`, `benefits_enrollment_navigator`, `debt_cancellation_engine`, `community_resource_router`.
+
+## Engine
+
+`AsyncWorkflowEngine` loads an `AOPDefinition` (nodes + edges) and executes it.
+
+- **Four node types:** `ACTION`, `CONDITION`, `HANDOFF`, `APPROVAL`. Document production is an ACTION subtype (`metadata.action_kind == "generate"`) — no fifth type.
+- **Bounded loops (LDCG):** a strongly-connected region closed by a `loop_back` edge repeats up to `max_iterations`, checks an exit condition each pass, and escalates to a human gate (`on_limit_next`) when the cap is hit. Pure DAGs take an unchanged topological fast path; unannotated cycles are still rejected.
+- **Idempotent resume (Non-Negotiable #3):** per-node output cache in `context["__node_outputs"]` (namespaced per iteration inside loops) means side-effecting nodes fire exactly once per pass, never re-firing on resume.
+- **Pause states:** `AWAITING_INPUT`, `AWAITING_APPROVAL`, `AWAITING_EXTERNAL`.
 
 ## Architecture
 
@@ -8,110 +34,92 @@
 src/cen/
   config.py              # pydantic-settings (CEN_ env prefix)
   core/
-    engine.py            # AsyncWorkflowEngine — DAG execution with LLM DI
-    models.py            # Pydantic schemas (AOP nodes, edges, workflow I/O)
-    aop_parser.py        # JSON → AOPDefinition loader
-    exceptions.py        # Domain exceptions
-  llm/
-    base.py              # LanguageModel Protocol
-    mock.py              # Rule-based mock (always available)
-    gguf.py              # llama-cpp-python wrapper for local models
-    factory.py           # FallbackLanguageModel — timeout → mock fallback
-  privacy/
-    pii_scrubber.py      # Regex (SSN/phone/email) + optional Presidio NER
-    sanitizer.py         # Scrub dicts before telemetry
-  telemetry/
-    bus.py               # Async EventBus (observer pattern)
-    events.py            # WorkflowCompleted, LLMFallback, AOPLoaded
-    handlers.py          # structlog handlers with PII scrubbing
+    engine.py            # AsyncWorkflowEngine (thin dispatcher)
+    engine_runtime.py    # per-node-type handlers + ExecutionState
+    engine_helpers.py    # condition eval, input derivation, branch skip
+    engine_loops.py      # bounded loop regions (LDCG)
+    engine_generate.py   # GENERATE (document production) handler
+    models.py            # Pydantic schemas (AOP, session, concierge, ...)
+    aop_parser.py        # JSON → AOPDefinition
+    session_store.py / project_store.py / audit_store.py
+    artifact_store.py / chat_store.py / faq_store.py    # aiosqlite stores
+    concierge*.py        # multi-source retrieval + prompt builder
+    faq_import.py / faq_classify.py / tags.py           # FAQ + tag tooling
+    queue.py / proactive.py / suggestions.py
+  llm/                   # LanguageModel Protocol: mock | gguf | openai_compat
+  privacy/               # PII scrubber (regex default, Presidio optional) + sanitizer
+  telemetry/             # AsyncEventBus + audit/telemetry handlers
+  sop/                   # parsers / extractor / validators / fixer / promoter / store
+  storage/               # LocalDiskStorage adapter
+  prompts/  seed/        # concierge prompt; FAQ library + tag vocabulary seeds
+  modules/               # 6 built-in AOP workflow definitions (JSON)
   api/
     app.py               # create_app() factory
     dependencies.py      # FastAPI Depends() providers
-    routes/              # /execute, /update-aop, /tlm/generate, /health, /ready
-    middleware/           # X-Request-ID, global error → JSON
-  modules/               # 5 AOP workflow definitions (JSON)
+    routes/              # cases, projects, artifacts, concierge, sop, modules,
+                         #   workflows, auth, me, llm (tlm), health
+frontend/src/            # React 19 + Vite + TS + Tailwind (state via App-level hooks)
 ```
 
-## AOP Modules
+## LLM backends — `CEN_LLM_BACKEND`
 
-| Module | Description |
-|--------|-------------|
-| **Charity Care Navigator** | Routes patients by FPL income to charity care or debt cancellation |
-| **Debt Cancellation Engine** | Audits bills for duplicates and NSA violations, generates disputes |
-| **Insurance Appeal Assistant** | Classifies denials with 3-way branching (medical necessity / coding / general) |
-| **Benefits Enrollment Navigator** | Medicaid → ACA → CHIP eligibility cascade |
-| **Community Resource Router** | Sequential screening for housing, food, and transportation needs |
+| Backend | Use | PHI safe? |
+|---|---|---|
+| `mock` | tests / dev without a model (default) | yes (no network) |
+| `gguf` | local llama.cpp | yes (no network) |
+| `api` | OpenAI-compatible endpoint (Ollama, vLLM, hosted) | **only with a signed BAA** |
+
+Production runs `api` against Groq (`llama-3.3-70b-versatile`). New providers go behind the `LanguageModel` Protocol — never call third-party SDKs from routes/services. When `deployment_mode=production`, the `api` backend requires `CEN_LLM_BAA_CONFIRMED=true` or the app refuses to start.
 
 ## Setup
 
 ```bash
-# Install in dev mode
-pip install -e ".[dev]"
-
-# Copy and configure environment
-cp .env.example .env
+pip install -e ".[dev]"          # backend
+cd frontend && npm install       # frontend
 ```
 
 ## Running
 
 ```bash
-# Start with mock LLM (default)
-CEN_LLM_BACKEND=mock uvicorn cen.api.app:create_app --factory --reload
+# Backend (mock LLM by default) — serves the built frontend if present
+uvicorn cen.api.app:create_app --factory --reload --port 8000
 
-# Start with local GGUF model
-CEN_LLM_BACKEND=gguf CEN_GGUF_MODEL_PATH=./models/model.gguf uvicorn cen.api.app:create_app --factory --reload
-```
+# Frontend dev server (hot reload, proxies the API)
+cd frontend && npm run dev       # http://localhost:5173
 
-## API
-
-```bash
-# Liveness check
-curl http://localhost:8000/health
-
-# Readiness (loaded modules + LLM status)
-curl http://localhost:8000/ready
-
-# Execute a workflow
-curl -X POST http://localhost:8000/execute \
-  -H "Content-Type: application/json" \
-  -d '{"module_name":"charity_care_navigator","context":{"income_fpl_percent":150}}'
-
-# Register/update an AOP module at runtime
-curl -X POST http://localhost:8000/update-aop \
-  -H "Content-Type: application/json" \
-  -d @src/cen/modules/debt_cancellation_engine.json
-
-# Generate text via LLM
-curl -X POST http://localhost:8000/tlm/generate \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Check income eligibility","max_tokens":128}'
+# Local hosted LLM (OpenAI-compatible)
+CEN_LLM_BACKEND=api CEN_LLM_API_BASE=http://localhost:11434/v1 \
+CEN_LLM_MODEL=llama3 uvicorn cen.api.app:create_app --factory --reload
 ```
 
 ## Testing
 
 ```bash
-pytest tests/ -v
+pytest tests/ -v                 # backend
+mypy src/cen                     # type check
+cd frontend && npx tsc -b && npm run lint && npm run build
 ```
 
 ## Configuration
 
-All settings use the `CEN_` env prefix. See `.env.example` for the full list.
+All settings use the `CEN_` env prefix.
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `CEN_LLM_BACKEND` | `mock` | `mock` or `gguf` |
-| `CEN_GGUF_MODEL_PATH` | `./models/model.gguf` | Path to GGUF model file |
+|---|---|---|
+| `CEN_LLM_BACKEND` | `mock` | `mock` \| `gguf` \| `api` |
+| `CEN_LLM_API_BASE` / `CEN_LLM_MODEL` / `CEN_LLM_API_KEY` | — | OpenAI-compatible endpoint config (`api` backend) |
+| `CEN_GGUF_MODEL_PATH` | `./models/model.gguf` | GGUF model path (`gguf` backend) |
 | `CEN_LLM_TIMEOUT` | `10.0` | Seconds before falling back to mock |
-| `CEN_CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated allowed origins |
-| `CEN_LOG_RENDERER` | `console` | `console` (dev) or `json` (prod) |
-| `CEN_PII_BACKEND` | `regex` | `regex` or `presidio` |
+| `CEN_DB_PATH` | `./data/cen.db` | SQLite path (`:memory:` in tests) |
+| `CEN_PII_BACKEND` | `regex` | `regex` \| `presidio` |
+| `CEN_DEPLOYMENT_MODE` | `synthetic` | `synthetic` \| `production` (gates the BAA check) |
+| `CEN_OPERATOR_PASSWORD` / `CEN_ADMIN_OPERATORS` | — | prototype auth + admin allowlist |
 
-## Optional Dependencies
+## Optional dependencies
 
 ```bash
-# Local GGUF model support
-pip install -e ".[llm]"
-
-# Presidio NER-based PII scrubbing
-pip install -e ".[privacy]"
+pip install -e ".[llm]"          # local GGUF support (llama-cpp-python)
+pip install -e ".[privacy]"      # Presidio NER-based PII scrubbing
 ```
+
+See `CLAUDE.md` for engineering standards, non-negotiables, and the verification process.

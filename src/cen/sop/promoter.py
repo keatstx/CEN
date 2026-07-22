@@ -67,11 +67,13 @@ def promote_draft(
         engine.load_aop(promoted)
     except CycleDetectedError as exc:
         # Validator should catch this first, but defend in depth in case
-        # an LLM-extracted draft slips through with a cycle.
+        # an LLM-extracted draft slips through with an unannotated cycle.
+        # (Bounded loop regions are supported, but extracted drafts don't
+        # carry the loop_back/LoopSpec annotation that makes one valid.)
         path.unlink(missing_ok=True)
         raise PromotionError(
-            "This workflow contains a loop. The current engine doesn't support "
-            "looping workflows — break the loop in the review UI and try again."
+            "This workflow has a loop that isn't set up as a bounded, "
+            "repeatable step — break the loop in the review UI and try again."
         ) from exc
     engines[module_name] = engine
 

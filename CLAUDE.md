@@ -52,11 +52,11 @@ Compliance rule: any deployment touching real patient data MUST use `mock`, `ggu
 - **AOP JSON loaded at startup** — module file changes need a server restart. `--reload` handles this in dev; production does not.
 - **SQLite single-writer** — long write transactions block all other writes. Keep transactions short.
 - **`aiosqlite` is not parallel** — serializes writes internally. Don't expect parallelism on the write path.
-- **Re-execution duplicates side effects** — engine re-runs from entry node on resume. Until `context["__node_outputs"]` cache lands, ACTION nodes that call LLMs/external APIs will re-fire on every resume. Guard manually.
+- **Re-execution + idempotency** — engine re-runs from the entry node on resume; the `context["__node_outputs"]` cache (shipped) makes each node replay instead of re-firing, so LLM/external side effects happen exactly once. Inside a bounded loop the cache key is namespaced per iteration (once per pass). New ACTION nodes still must respect the cache to stay idempotent.
 - **`mock` LLM returns canned responses** — assert structure, not content.
 - **PII scrubber is regex by default** — covers common patterns, not exhaustive. For real PHI, set `CEN_PII_BACKEND=presidio` and verify spaCy model installed.
 - **Pydantic v2** — `.model_dump()` not `.dict()`, `@field_validator` not `@validator`. Don't mix v1 patterns.
-- **`networkx` cycles** — engine handles loops; `DAGViewer.tsx` topological layout (Kahn's) does not. Deeply nested cycles render weird before they break the engine.
+- **`networkx` cycles** — the engine runs *bounded loop regions* (LDCG): a `loop_back` edge + a `LoopSpec` on the entry, condensed to a super-node so the topological walk still works. Unannotated cycles are still rejected at load. `DAGViewer.tsx` (Kahn's topological layout) does **not** render loops yet — a loop-bearing workflow shows its skeleton, and the loop_back edge renders oddly.
 - **`BackgroundTasks` runs after the response** — never use for anything affecting the response payload.
 - **Frontend build artifacts gitignored** — `frontend/dist/` and `frontend/.vite/` never committed. Dockerfile builds at deploy time.
 
@@ -111,7 +111,7 @@ data/                     # SQLite + uploads (gitignored)
 2. **Append-Only Audit Trail** — No update/delete paths. Every state change emits an `AuditEvent`. Hash chain unbroken. Right-to-delete = redaction (PII nulled, chain preserved).
 3. **Idempotent Engine Resumption** — Side-effecting nodes use `executed_nodes` skip-list and per-node cache `context["__node_outputs"]`. Any new ACTION node that calls an LLM, sends an email, or files a request must respect the cache.
 4. **Module Version Pinning** — Session pinned to module version at creation. Newer versions don't affect in-flight sessions.
-5. **Declarative Workflows** — Branching/looping/approval logic lives in AOP JSON. The four node types are sufficient — extend the schema before adding a fifth.
+5. **Declarative Workflows** — Branching/looping/approval logic lives in AOP JSON. The four node types remain sufficient: document generation is an ACTION subtype (`metadata.action_kind == "generate"`) and bounded loops are edge/metadata annotations (`loop_back` edge + `LoopSpec`), not a fifth node type. Extend via metadata before adding a type.
 6. **Confidence & Provenance** — Every LLM output tagged with `{model, prompt_version, timestamp, confidence?}`. UI uses for "Verified by AI" vs "Needs Verification" affordances.
 7. **API-First** — Every feature is a FastAPI route with Pydantic models. Frontend is one consumer; CLI/curl drives the same flow.
 8. **Multi-Tenant Stub Now, Enforcement Later** — `owner_id` (nullable) on every record. Reads/writes go through a service layer taking `owner_id`. When auth lands, enforcement is a one-line change.
@@ -133,8 +133,8 @@ Current: `ACTIVE → AWAITING_APPROVAL → ACTIVE → COMPLETED/FAILED`. Planned
 - Unique `snake_case` node ids.
 - `CONDITION` nodes need both `true_next` and `false_next` pointing to real ids.
 - Every non-terminal node has at least one outgoing edge; every node reachable from a root.
-- Loops allowed (negotiation rounds, retry).
-- `metadata.input_schema` (planned) declares required context fields — engine pauses with `AWAITING_INPUT` if missing.
+- Loops allowed as **bounded regions** (negotiation rounds, retry): a `loop_back` edge (exit→entry) + a `LoopSpec` on the entry (`exit_condition_field`, `max_iterations`, `on_limit_next` → an APPROVAL/HANDOFF gate). Unannotated cycles are rejected at load. Loop bodies must not contain branching CONDITION nodes (the controller makes the loop decision).
+- `metadata.input_schema` declares required context fields — engine pauses with `AWAITING_INPUT` if missing.
 - Workflow JSON lives in `CEN_modules_v2/` (v2) and `src/cen/modules/` (built-in defaults).
 
 ---

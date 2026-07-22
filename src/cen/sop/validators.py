@@ -157,17 +157,22 @@ def validate_draft(module: AOPDefinition) -> List[ValidationIssue]:
             )
 
     # ── Cycle detection ──────────────────────────────────────────
-    # The current engine rejects cyclic graphs at load time. Many SOPs
-    # have legitimate revision loops ("if NO, refine and resubmit"); we
-    # mark these as errors so the author can break the loop in review
-    # before promote. When the engine eventually supports loops natively
-    # this becomes a warning.
+    # The engine supports *bounded* loop regions (LDCG), but only when a
+    # cycle is explicitly annotated (a loop_back edge + a LoopSpec on the
+    # entry). SOP-extracted drafts carry no such annotation, so any cycle
+    # here is an unannotated loop the engine would reject at load. We
+    # flag it so the author can break it — or author a bounded region —
+    # before promote.
     for cycle_node in _find_cycle_nodes(out_edges):
         issues.append(
             ValidationIssue(
                 severity="error",
                 node_id=cycle_node,
-                message="Node participates in a cycle; the engine rejects cyclic graphs.",
+                message=(
+                    "Node participates in a cycle. Unannotated loops aren't "
+                    "runnable — break it in review, or author a bounded loop "
+                    "region, before promote."
+                ),
             )
         )
 
