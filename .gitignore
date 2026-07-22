@@ -12,3 +12,4 @@ venv/
 .mypy_cache/
 *.gguf
 data/
+.gstack/
