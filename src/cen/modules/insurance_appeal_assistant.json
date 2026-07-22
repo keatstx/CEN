@@ -278,7 +278,32 @@
       "id": "draft_appeal",
       "type": "ACTION",
       "metadata": {
-        "label": "Draft Appeal Letter"
+        "label": "Draft Appeal Letter",
+        "description": "Generate a plain-language appeal letter from the case details. A counselor reviews and approves it before it is sent.",
+        "action_kind": "generate",
+        "tags": ["function:drafting", "domain:insurance_appeal"],
+        "input_schema": [
+          {
+            "key": "patient_name",
+            "label": "Patient name",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "denial_reason",
+            "label": "Reason the claim was denied",
+            "type": "text",
+            "required": true,
+            "description": "In plain words — what the insurer said when they denied the claim."
+          }
+        ],
+        "generate": {
+          "output_kind": "appeal_letter",
+          "prompt": "Write a formal but plain-language health-insurance appeal letter for patient {patient_name}. The claim was denied for this reason: {denial_reason}. Argue for reconsideration on the grounds of medical necessity, reference the patient's right to appeal, and keep it under one page at an 8th-grade reading level. Do not invent facts not provided.",
+          "input_fields": ["patient_name", "denial_reason"],
+          "prompt_version": "1.0",
+          "requires_approval": true
+        }
       }
     },
     {

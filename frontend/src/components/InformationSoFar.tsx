@@ -20,6 +20,9 @@ export default function InformationSoFar({ caseRecord }: Props) {
     if (k.endsWith("_status")) return false;
     if (k.endsWith("_result")) return false;
     if (k.endsWith("_llm_response")) return false;
+    // Generated documents render in their own panel (GeneratedDocuments).
+    if (k.endsWith("_document")) return false;
+    if (k.endsWith("_provenance")) return false;
     if (v === null || v === undefined || v === "") return false;
     return true;
   });

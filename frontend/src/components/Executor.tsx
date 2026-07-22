@@ -1,6 +1,7 @@
 import { caseExportUrl, caseSummaryUrl } from "../api";
 import type { CaseSession } from "../hooks/useCaseSession";
 import Documents from "./Documents";
+import GeneratedDocuments from "./GeneratedDocuments";
 import InformationSoFar from "./InformationSoFar";
 import StepCard from "./StepCard";
 import ChatLedStep from "./chat/ChatLedStep";
@@ -104,6 +105,8 @@ export default function Executor({ session }: Props) {
           <Stepper caseRecord={activeCase} onRewind={handleRewind} />
 
           <InformationSoFar caseRecord={activeCase} />
+
+          <GeneratedDocuments caseRecord={activeCase} />
 
           {activeCase.status === "AWAITING_INPUT" ? (
             <ChatLedStep
