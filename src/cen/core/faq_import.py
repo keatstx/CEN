@@ -29,7 +29,7 @@ auto-scope to the right workflow:
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
 from cen.core.faq_store import FAQStore
@@ -61,6 +61,7 @@ class ParsedFAQ:
     answer: str  # full answer + sources, ready to drop into the store
     use_case: str  # raw label from the markdown
     module_name: Optional[str]
+    tags: list[str] = field(default_factory=list)
 
 
 def parse_faq_markdown(text: str) -> list[ParsedFAQ]:
@@ -239,8 +240,18 @@ async def import_faqs(
 
     The caller decides whether to scope to a project or import as
     library-wide. Use-case-aware module scoping is automatic."""
+    # Function tags (3b): prefer the classify-pass overlay (LLM/heuristic
+    # artifact) keyed by question; fall back to the inline heuristic so
+    # step-scoped FAQ fires even before a classify pass has been run.
+    from cen.core.faq_classify import heuristic_function, load_overlay
+
+    overlay = load_overlay()
     parsed = parse_faq_markdown(text)
     for entry in parsed:
+        tags = overlay.get(entry.question)
+        if tags is None:
+            fn = heuristic_function(entry.question, entry.answer)
+            tags = [fn] if fn else []
         await faq_store.create(
             question=entry.question,
             answer=entry.answer,
@@ -248,6 +259,7 @@ async def import_faqs(
             project_id=project_id,
             source_filename=source_filename,
             owner_id=owner_id,
+            tags=tags,
         )
     return len(parsed)
 

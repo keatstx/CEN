@@ -1,0 +1,455 @@
+{
+  "A neighbor says, \"I already paid my hospital bill — it's too late for charity care.\" Is that true?": [
+    "function:document_collection"
+  ],
+  "What myths or fears stop families from applying for charity care, and how do I address them?": [
+    "function:tracking"
+  ],
+  "How do I open a new Charity Care case in the CEN platform?": [
+    "function:intake"
+  ],
+  "What information do I need to gather from the family before their first session?": [
+    "function:document_collection"
+  ],
+  "How does the CEN platform determine whether a family qualifies for charity care?": [
+    "function:intake"
+  ],
+  "The family doesn't have pay stubs — what do I do during the intake screen?": [
+    "function:intake"
+  ],
+  "How do I find out what charity care policy a specific hospital has before submitting an application?": [
+    "function:policy_lookup"
+  ],
+  "What does the Charity Care Navigator workflow actually look like once I start it — what are the main stages?": [
+    "function:document_collection"
+  ],
+  "What is the navigator's role versus what the platform does automatically in the Charity Care workflow?": [
+    "function:document_collection"
+  ],
+  "How long does the charity care application process typically take from start to finish?": [
+    "function:document_collection"
+  ],
+  "What happens at the CONDITION node that decides \"free care\" vs. \"discounted care\" — can I override it?": [
+    "function:calculation"
+  ],
+  "The family just told me they have bills from TWO different hospitals — how does the workflow handle that?": [
+    "function:policy_lookup"
+  ],
+  "What is an APPROVAL node, and what does it mean when the Charity Care case hits one?": [
+    "function:approval"
+  ],
+  "How do I handle it if the family wants to stop the process midway through the trial stage?": [
+    "function:tracking"
+  ],
+  "What does the AI Concierge actually help with during the Trial stage — can it draft the application letter?": [
+    "function:drafting"
+  ],
+  "What does \"HANDOFF\" mean in the workflow, and when does the Charity Care process hand off to someone else?": [
+    "function:escalation"
+  ],
+  "How do I upload documents to an open Charity Care case in the platform?": [
+    "function:document_collection"
+  ],
+  "I'm in the middle of a session and need to find a charity care case I started last week — how do I locate it quickly?": [
+    "function:tracking"
+  ],
+  "Can I update the client's household income figure after the case is already in progress?": [
+    "function:intake"
+  ],
+  "What does it mean when a case node shows a \"Blocked\" status in the DAG Viewer?": [
+    "function:tracking"
+  ],
+  "How does the warm handoff work in practice — what do I do in the platform when I need to transfer this case to a legal aid partner?": [
+    "function:document_collection"
+  ],
+  "How do I know if a hospital's financial assistance application deadline has passed for this family?": [
+    "function:policy_lookup"
+  ],
+  "How do I handle a situation where the hospital says they never received the application we submitted through the platform?": [
+    "function:submission"
+  ],
+  "How do I submit the completed charity care application through the CEN platform?": [
+    "function:submission"
+  ],
+  "How do I export the case summary at the end of a charity care case?": [
+    "function:document_collection"
+  ],
+  "How do I generate an audit trail for a charity care case?": [
+    "function:document_collection"
+  ],
+  "What do I do if the hospital portal rejects the application upload?": [
+    "function:submission"
+  ],
+  "How do I mark a charity care case as closed after the hospital issues its determination?": [
+    "function:tracking"
+  ],
+  "What KPI data does the platform record for a charity care case, and where can I see it?": [
+    "function:closeout"
+  ],
+  "The family received a partial approval — hospital will forgive 60% but not 100%. How do I document this and decide next steps?": [
+    "function:document_collection"
+  ],
+  "How do I handle document retention — how long are case files stored on the CEN platform?": [
+    "function:document_collection"
+  ],
+  "What happens after a charity care case is closed — does FairClaims do anything to keep the family protected going forward?": [
+    "function:closeout"
+  ],
+  "If the portal submission went through but I realize I attached the wrong document — is there any way to correct this?": [
+    "function:document_collection"
+  ],
+  "What are the main ways a family can get relief from medical debt — is it just about paying less?": [
+    "function:identity_verification"
+  ],
+  "Can medical debt actually be disputed or cancelled — or does the family always have to pay something?": [
+    "function:document_collection"
+  ],
+  "Does medical debt affect credit scores, and can FairClaims help with that too?": [
+    "function:document_collection"
+  ],
+  "How do I open a Medical Debt case in the CEN platform?": [
+    "function:intake"
+  ],
+  "What documents should a family bring to the discovery session for a medical debt case?": [
+    "function:document_collection"
+  ],
+  "How does the Debt Cancellation Engine determine which relief pathway to pursue for a specific family?": [
+    "function:tracking"
+  ],
+  "What if the family's debt is already in collections — does that change anything in the discovery process?": [
+    "function:document_collection"
+  ],
+  "How do I request an itemized bill for a client — is that done through the platform?": [
+    "function:drafting"
+  ],
+  "What are the main steps in the Debt Cancellation Engine workflow, and what does each phase accomplish?": [
+    "function:negotiation"
+  ],
+  "How long does a typical medical debt case take from open to resolution?": [
+    "function:negotiation"
+  ],
+  "What happens at the negotiation step — what is the navigator actually doing with the hospital or collector?": [
+    "function:negotiation"
+  ],
+  "What is the Rewind feature used for in a medical debt case?": [
+    "function:calculation"
+  ],
+  "How does the AI Concierge help during the billing error review step — what can I ask it?": [
+    "function:document_collection"
+  ],
+  "What happens at the HANDOFF node if we need to connect a family to a legal aid organization for their medical debt?": [
+    "function:document_collection"
+  ],
+  "How do I update the total debt amount in a medical debt case if we discover additional bills after the case is already open?": [
+    "function:calculation"
+  ],
+  "How do I use the platform to track the status of a letter I sent to a collection agency — is there a follow-up reminder system?": [
+    "function:document_collection"
+  ],
+  "Can I print or share a copy of the dispute letter with the family before I submit it?": [
+    "function:drafting"
+  ],
+  "How do I handle it if a client's debt has been sold to multiple collection agencies and I'm not sure who actually owns it?": [
+    "function:document_collection"
+  ],
+  "How do I reassign a medical debt case from one navigator to another team member?": [
+    "function:document_collection"
+  ],
+  "What does the platform's \"KPI Rollup\" show for medical debt cases, and why does it matter?": [
+    "function:tracking"
+  ],
+  "Can I see the timeline of everything that has happened on a case — all actions, uploads, and notes in one place?": [
+    "function:document_collection"
+  ],
+  "How do I submit a final billing error dispute letter through the CEN platform?": [
+    "function:drafting"
+  ],
+  "How do I document a negotiated settlement in the CEN platform when the hospital or collector agrees to accept a reduced amount?": [
+    "function:document_collection"
+  ],
+  "How do I close a medical debt case after the debt is fully resolved?": [
+    "function:closeout"
+  ],
+  "What do I do if the portal I need to submit the dispute through is not working?": [
+    "function:submission"
+  ],
+  "How do I export a case record so I can share the outcome with the client?": [
+    "function:closeout"
+  ],
+  "What happens to the case data after a medical debt case is closed — can it be used for anything else?": [
+    "function:closeout"
+  ],
+  "How do I generate a compliance audit trail for a medical debt case?": [
+    "function:document_collection"
+  ],
+  "What do I do if a closed medical debt case needs to be reopened because the collector is contacting the client again?": [
+    "function:closeout"
+  ],
+  "What is the correct way to flag a case where we suspect fraud — for example, the collector seems to be fake?": [
+    "function:document_collection"
+  ],
+  "What is a prior authorization, and why does it matter to families we serve?": [
+    "function:approval"
+  ],
+  "How do I explain the prior authorization appeal process to a family in plain terms during outreach?": [
+    "function:drafting"
+  ],
+  "How do I open a prior authorization appeal case in the CEN platform?": [
+    "function:intake"
+  ],
+  "What information from the denial letter is most important to record during the discovery session?": [
+    "function:drafting"
+  ],
+  "What documents should I ask the doctor's office to provide for a prior auth appeal?": [
+    "function:document_collection"
+  ],
+  "How do I determine if an appeal deadline has passed — and what can I do if it has?": [
+    "function:calculation"
+  ],
+  "What does the Insurance Appeal Assistant workflow look like step by step?": [
+    "function:drafting"
+  ],
+  "What does the \"Build Appeal\" step look like — is the appeal letter written in the platform?": [
+    "function:drafting"
+  ],
+  "How do I coordinate with the doctor's office during the Trial stage — does the platform help with that?": [
+    "function:document_collection"
+  ],
+  "What does the Rewind feature help with in a prior authorization appeal case?": [
+    "function:document_collection"
+  ],
+  "What happens at the \"Evaluate Response\" CONDITION node after the insurer responds to an internal appeal?": [
+    "function:drafting"
+  ],
+  "How do I handle an urgent or expedited prior authorization appeal for a family who needs treatment immediately?": [
+    "function:intake"
+  ],
+  "What does \"teach resilience\" mean in the prior authorization context — how does FairClaims approach that?": [
+    "function:document_collection"
+  ],
+  "What does an APPROVAL node look like in the Insurance Appeal Assistant, and when does it appear?": [
+    "function:approval"
+  ],
+  "How do I upload a Letter of Medical Necessity from the doctor into the case?": [
+    "function:drafting"
+  ],
+  "How do I track the appeal deadline in the platform so I don't miss it?": [
+    "function:tracking"
+  ],
+  "Can I communicate with the insurer through the platform, or do I have to call or fax separately?": [
+    "function:document_collection"
+  ],
+  "What do I do when a case gets stuck at the \"Awaiting Provider Documents\" step for too long?": [
+    "function:document_collection"
+  ],
+  "How does the platform handle a case where the family has TWO different insurance plans (coordination of benefits)?": [
+    "function:intake"
+  ],
+  "What happens if the insurer sends a request for additional information rather than an approval or denial of the appeal?": [
+    "function:approval"
+  ],
+  "Can I see what previous appeals the family has filed — even ones handled before they came to FairClaims?": [
+    "function:intake"
+  ],
+  "What does \"Warm Handoff\" look like for a prior authorization case that needs legal representation?": [
+    "function:drafting"
+  ],
+  "How do I close an Insurance Appeal case and record the final outcome?": [
+    "function:closeout"
+  ],
+  "How do I submit the completed appeal letter through the CEN platform?": [
+    "function:drafting"
+  ],
+  "How do I export the full appeal packet in case the insurer says they didn't receive it?": [
+    "function:document_collection"
+  ],
+  "What do I do if the insurer's appeal portal crashes mid-submission — is my appeal lost?": [
+    "function:submission"
+  ],
+  "How do I record that the insurer approved the appeal — what data does the platform need?": [
+    "function:approval"
+  ],
+  "What happens to the family after a prior auth appeal case is closed — does FairClaims do any follow-up?": [
+    "function:closeout"
+  ],
+  "How do I generate the audit trail for an insurance appeal case — what does it include?": [
+    "function:drafting"
+  ],
+  "How do I flag a pattern of denials by the same insurer for FairClaims' advocacy team?": [
+    "function:tracking"
+  ],
+  "What do I do if the IRO denies the external appeal — are there any further options?": [
+    "function:tracking"
+  ],
+  "How do I close a prior authorization case that was denied at all levels and the family has decided not to pursue further options?": [
+    "function:closeout"
+  ],
+  "What does the KPI Rollup show specifically for insurance appeal cases?": [
+    "function:tracking"
+  ],
+  "How does FairClaims approach employer accountability — does it do anything beyond the individual worker's case?": [
+    "function:document_collection"
+  ],
+  "How do I open a Workplace Injury case in the CEN platform?": [
+    "function:intake"
+  ],
+  "What documents should a worker bring to the first discovery session for a workplace injury case?": [
+    "function:document_collection"
+  ],
+  "The worker says they're classified as an \"independent contractor\" — does that mean they have no workers' comp rights?": [
+    "function:tracking"
+  ],
+  "What information do I need to calculate the worker's average weekly wage for benefit purposes?": [
+    "function:calculation"
+  ],
+  "What does the Workplace Injury workflow look like from start to finish?": [
+    "function:document_collection"
+  ],
+  "What happens at the \"Immediate Guidance\" phase if the injury just happened — what does the workflow tell us to do?": [
+    "function:identity_verification"
+  ],
+  "How does the platform help the navigator review a workers' comp denial letter?": [
+    "function:drafting"
+  ],
+  "What is the difference between a \"temporary disability\" benefit and a \"permanent disability\" award?": [
+    "function:calculation"
+  ],
+  "What should I do if the worker tells me their employer is threatening retaliation for filing a workers' comp claim?": [
+    "function:document_collection"
+  ],
+  "What does the \"Benefits Maximization\" phase of the workflow cover?": [
+    "function:eligibility_check"
+  ],
+  "How do I upload a medical record from the treating physician into the workplace injury case?": [
+    "function:document_collection"
+  ],
+  "How do I update the case if the worker returns to work at a modified duty assignment?": [
+    "function:calculation"
+  ],
+  "What should I do if the employer's workers' comp insurer sends the worker to an \"Independent Medical Examination\" (IME)?": [
+    "function:document_collection"
+  ],
+  "How do I use the platform to track multiple workers' comp benefit payments — are there tools for monitoring whether payments are on time?": [
+    "function:tracking"
+  ],
+  "Can the CEN team communicate directly with the workers' comp insurer on the worker's behalf?": [
+    "function:drafting"
+  ],
+  "What do I do if the worker accepts a settlement offer without consulting me or the attorney first?": [
+    "function:document_collection"
+  ],
+  "What is a Latimer Leader, and when does a workplace injury case involve one?": [
+    "function:escalation"
+  ],
+  "What do I do when a worker wants to know what their case is worth financially — can I help with that estimate?": [
+    "function:calculation"
+  ],
+  "How do I document the attorney referral handoff in the CEN platform so the case record is complete?": [
+    "function:document_collection"
+  ],
+  "How do I close a workplace injury case after the claim is resolved?": [
+    "function:closeout"
+  ],
+  "What does the audit trail for a workplace injury case include — and why is it important for these cases?": [
+    "function:document_collection"
+  ],
+  "What do I do if the employer retaliates against the worker after the case is closed — can we reopen it?": [
+    "function:closeout"
+  ],
+  "How do I export a case summary for a worker to keep as a record of everything FairClaims did?": [
+    "function:closeout"
+  ],
+  "What happens if the Illinois WCC requires additional information after the claim has been submitted?": [
+    "function:submission"
+  ],
+  "How does the platform help me flag potential OSHA violations for systemic tracking?": [
+    "function:tracking"
+  ],
+  "What does the KPI Rollup track specifically for workplace injury cases?": [
+    "function:tracking"
+  ],
+  "How do I talk to a community member who is worried that coming forward about a toxic exposure will cause trouble for them?": [
+    "function:consent"
+  ],
+  "How do I open a Toxic Exposure case in the CEN platform?": [
+    "function:intake"
+  ],
+  "What questions should I ask during the intake to assess whether a family might qualify for a toxic exposure claim?": [
+    "function:intake"
+  ],
+  "How does the CEN platform screen for which mass tort or class action a family might be eligible for?": [
+    "function:eligibility_check"
+  ],
+  "What documents should a family gather before the discovery session for a toxic exposure case?": [
+    "function:document_collection"
+  ],
+  "What does the Toxic Exposure workflow look like from end to end?": [
+    "function:document_collection"
+  ],
+  "How do I explain what happens after the attorney referral — what does the legal process look like from the family's perspective?": [
+    "function:negotiation"
+  ],
+  "How does the navigator use the platform's exposure timeline tool during the trial stage?": [
+    "function:document_collection"
+  ],
+  "What does the \"Ongoing Monitoring\" phase of the Toxic Exposure workflow do?": [
+    "function:tracking"
+  ],
+  "How does the AI Concierge help during the documentation gathering phase of a toxic exposure case?": [
+    "function:document_collection"
+  ],
+  "What happens at the APPROVAL node in a toxic exposure case?": [
+    "function:approval"
+  ],
+  "What does the Warm Handoff to a mass tort attorney actually include — how detailed is the case summary?": [
+    "function:document_collection"
+  ],
+  "How do I update a toxic exposure case when a new medical diagnosis is confirmed after the case is already open?": [
+    "function:eligibility_check"
+  ],
+  "How do I find environmental data for the client's neighborhood to support the exposure assessment?": [
+    "function:document_collection"
+  ],
+  "Can I use the CEN platform to coordinate with a community health partner — for example, a community health center — for a client's ongoing medical monitoring?": [
+    "function:document_collection"
+  ],
+  "What do I do if a client's toxic exposure case involves a defective medical device — like a recalled implant — rather than an environmental exposure?": [
+    "function:document_collection"
+  ],
+  "How do I handle a case where the client is already represented by an attorney — should I still open a CEN case?": [
+    "function:intake"
+  ],
+  "What happens if the mass tort program the client was matched to closes or settles before the client's claim is processed?": [
+    "function:closeout"
+  ],
+  "How do I add the client's SDOH (Social Determinants of Health) data to a toxic exposure case — and why does it matter?": [
+    "function:intake"
+  ],
+  "How do I finalize and close a toxic exposure case — what does closure look like for these cases?": [
+    "function:closeout"
+  ],
+  "How do I export a case summary for a client whose toxic exposure settlement has been finalized?": [
+    "function:document_collection"
+  ],
+  "What does the audit trail include for a toxic exposure case — especially important given the long duration of these cases?": [
+    "function:document_collection"
+  ],
+  "How do I document a settlement outcome in the CEN platform — what data is needed?": [
+    "function:document_collection"
+  ],
+  "What happens after a toxic exposure case is closed if new research links the client's exposure type to additional health conditions?": [
+    "function:closeout"
+  ],
+  "How does FairClaims' community advocacy data contribution work — what happens with the exposure data after the case is closed?": [
+    "function:closeout"
+  ],
+  "What do I do if the attorney sends back the case saying the client doesn't qualify — how do I handle that with the family?": [
+    "function:tracking"
+  ],
+  "What does the KPI Rollup track specifically for toxic exposure cases?": [
+    "function:tracking"
+  ],
+  "If I'm new to the CEN platform and the toxic exposure module — what is the single most important thing to know when handling these cases?": [
+    "function:document_collection"
+  ]
+}
