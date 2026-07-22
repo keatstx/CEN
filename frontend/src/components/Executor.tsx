@@ -3,6 +3,7 @@ import type { CaseSession } from "../hooks/useCaseSession";
 import Documents from "./Documents";
 import GeneratedDocuments from "./GeneratedDocuments";
 import InformationSoFar from "./InformationSoFar";
+import LoopStatus from "./LoopStatus";
 import StepCard from "./StepCard";
 import ChatLedStep from "./chat/ChatLedStep";
 import Stepper from "./Stepper";
@@ -103,6 +104,8 @@ export default function Executor({ session }: Props) {
           </div>
 
           <Stepper caseRecord={activeCase} onRewind={handleRewind} />
+
+          <LoopStatus caseRecord={activeCase} />
 
           <InformationSoFar caseRecord={activeCase} />
 
