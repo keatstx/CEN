@@ -297,6 +297,59 @@ def _extract_fields(body: str) -> dict:
     return fields
 
 
+# PHASE keyword -> function facet value. First match wins; ordered so
+# more specific words are tested before generic ones.
+_PHASE_FUNCTION_MAP: list[tuple[str, str]] = [
+    ("identity", "identity_verification"),
+    ("verif", "identity_verification"),
+    ("consent", "consent"),
+    ("intake", "intake"),
+    ("document", "document_collection"),
+    ("collection", "document_collection"),
+    ("eligib", "eligibility_check"),
+    ("presumptive", "eligibility_check"),
+    ("subsidy", "calculation"),
+    ("calc", "calculation"),
+    ("policy", "policy_lookup"),
+    ("lookup", "policy_lookup"),
+    ("draft", "drafting"),
+    ("letter", "drafting"),
+    ("negoti", "negotiation"),
+    ("approv", "approval"),
+    ("submit", "submission"),
+    ("submission", "submission"),
+    ("track", "tracking"),
+    ("poll", "tracking"),
+    ("status", "tracking"),
+    ("determination", "tracking"),
+    ("escalat", "escalation"),
+    ("exception", "escalation"),
+    ("notif", "notification"),
+    ("reconcil", "reconciliation"),
+    ("wrap", "closeout"),
+    ("close", "closeout"),
+]
+
+
+def _structural_tags(phase: str, node_type: NodeType) -> list[str]:
+    """Deterministically map a step's PHASE text + node type to function
+    tags. No LLM. Returns namespaced tags, e.g. ['function:eligibility_check'].
+    """
+    tags: list[str] = []
+    phase_l = (phase or "").lower()
+    for keyword, value in _PHASE_FUNCTION_MAP:
+        if keyword in phase_l:
+            tags.append(f"function:{value}")
+            break
+    # Node-type fallback/addition when PHASE didn't yield a function.
+    if not tags:
+        if node_type == NodeType.APPROVAL:
+            tags.append("function:approval")
+        elif node_type == NodeType.HANDOFF:
+            tags.append("function:escalation")
+    return tags
+
+
 def _build_node(
     *,
     node_id: str,
@@ -324,6 +377,17 @@ def _build_node(
         excerpt=excerpt.strip(),
     )
 
+    node_type, branches, next_targets = _classify_node(
+        node_id=node_id,
+        fields=fields,
+    )
+
+    # Structural tag auto-assignment (3b): PHASE + node type -> function
+    # tags, deterministically and with no LLM. Domain/attribute tags are
+    # left to human curation (and later the LLM extractor) since they
+    # aren't reliably inferable from an arbitrary SOP's structure.
+    tags = _structural_tags(fields["phase"], node_type)
+
     metadata = NodeMetadata(
         label=label,
         description=description,
@@ -334,11 +398,7 @@ def _build_node(
         parallel=parallel,
         source_ref=source_ref,
         params={"action_steps": fields["action_steps"]} if fields["action_steps"] else {},
-    )
-
-    node_type, branches, next_targets = _classify_node(
-        node_id=node_id,
-        fields=fields,
+        tags=tags or None,
     )
 
     edges: list[AOPEdge] = []

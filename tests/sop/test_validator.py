@@ -36,6 +36,22 @@ def test_empty_module_is_error():
     assert has_blocking_errors(issues)
 
 
+def test_unknown_tag_is_warning_not_error():
+    """A tag outside the vocabulary is surfaced as a warning but never
+    blocks promotion — authoring stays frictionless."""
+    node = AOPNode(
+        id="a",
+        type=NodeType.ACTION,
+        metadata=NodeMetadata(label="a", tags=["function:bogus_value", "domain:charity_care"]),
+    )
+    issues = validate_draft(AOPDefinition(module_name="m", nodes=[node], edges=[]))
+    assert not has_blocking_errors(issues)
+    tag_warnings = [i for i in issues if "vocabulary" in i.message]
+    assert len(tag_warnings) == 1
+    assert "function:bogus_value" in tag_warnings[0].message
+    assert "domain:charity_care" not in tag_warnings[0].message  # known, not flagged
+
+
 def test_condition_missing_one_branch_is_warning():
     """A CONDITION with one branch wired and the other null is valid —
     the engine treats the null side as "terminal here". The validator

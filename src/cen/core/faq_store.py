@@ -13,6 +13,7 @@ PII-scrubbed before it ever reaches this layer.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 import uuid
@@ -77,10 +78,14 @@ class FAQStore:
                 answer TEXT NOT NULL,
                 source_filename TEXT NOT NULL DEFAULT '',
                 owner_id TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                tags TEXT NOT NULL DEFAULT '[]'
             )
             """
         )
+        # Idempotent migration for DBs created before the tags column
+        # existed. SQLite has no "ADD COLUMN IF NOT EXISTS"; probe first.
+        await self._ensure_column("tags", "TEXT NOT NULL DEFAULT '[]'")
         await self._db.execute(
             "CREATE INDEX IF NOT EXISTS idx_faqs_module ON faqs(module_name)"
         )
@@ -91,6 +96,14 @@ class FAQStore:
             "CREATE INDEX IF NOT EXISTS idx_faqs_owner ON faqs(owner_id)"
         )
         await self._db.commit()
+
+    async def _ensure_column(self, name: str, decl: str) -> None:
+        """Add `name` to the faqs table if a legacy DB lacks it."""
+        assert self._db is not None
+        async with self._db.execute("PRAGMA table_info(faqs)") as cursor:
+            cols = {row["name"] for row in await cursor.fetchall()}
+        if name not in cols:
+            await self._db.execute(f"ALTER TABLE faqs ADD COLUMN {name} {decl}")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -106,6 +119,7 @@ class FAQStore:
         project_id: Optional[str] = None,
         source_filename: str = "",
         owner_id: Optional[str] = None,
+        tags: Optional[list[str]] = None,
     ) -> FAQ:
         now = datetime.now(timezone.utc).isoformat()
         faq = FAQ(
@@ -117,14 +131,15 @@ class FAQStore:
             source_filename=source_filename,
             owner_id=owner_id,
             created_at=now,
+            tags=tags or [],
         )
         assert self._db is not None
         await self._db.execute(
             """
             INSERT INTO faqs
                 (id, module_name, project_id, question, answer,
-                 source_filename, owner_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                 source_filename, owner_id, created_at, tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 faq.id,
@@ -135,6 +150,7 @@ class FAQStore:
                 faq.source_filename,
                 faq.owner_id,
                 faq.created_at,
+                json.dumps(faq.tags),
             ),
         )
         await self._db.commit()
@@ -211,11 +227,18 @@ class FAQStore:
         owner_id: Optional[str] = None,
         top_k: int = 3,
         min_score: float = 0.05,
+        boost_tags: Optional[list[str]] = None,
+        tag_boost: float = 0.15,
     ) -> list[tuple[FAQ, float]]:
         """Return up to top_k FAQs ranked by cosine similarity against
         the query, filtered to scores >= min_score. Each result is a
         (FAQ, score) tuple. The score is informational; it's a TF-IDF
         cosine over a stdlib bag-of-words, not a real semantic embedding.
+
+        ``boost_tags`` (the current step's tags) adds ``tag_boost`` per
+        shared tag to each FAQ's score *before* the min_score filter, so
+        a step-tagged FAQ can be rescued even when the lexical match is
+        weak (3b). This is the step-scoped-FAQ mechanism.
         """
         candidates = await self.list_all(
             module_name=module_name,
@@ -227,6 +250,7 @@ class FAQStore:
         q_vec = _vec(_tokenize(query))
         if not q_vec:
             return []
+        boost_set = set(boost_tags or [])
         scored: list[tuple[FAQ, float]] = []
         for faq in candidates:
             # Index the question + first 200 chars of the answer so the
@@ -235,6 +259,8 @@ class FAQStore:
             doc_text = f"{faq.question} {faq.answer[:200]}"
             d_vec = _vec(_tokenize(doc_text))
             score = _cosine(q_vec, d_vec)
+            if boost_set and faq.tags:
+                score += tag_boost * len(boost_set & set(faq.tags))
             if score >= min_score:
                 scored.append((faq, score))
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -242,6 +268,11 @@ class FAQStore:
 
     @staticmethod
     def _row_to_faq(row: aiosqlite.Row) -> FAQ:
+        raw_tags = row["tags"] if "tags" in row.keys() else "[]"
+        try:
+            tags = json.loads(raw_tags) if raw_tags else []
+        except (TypeError, json.JSONDecodeError):
+            tags = []
         return FAQ(
             id=row["id"],
             module_name=row["module_name"],
@@ -251,4 +282,5 @@ class FAQStore:
             source_filename=row["source_filename"],
             owner_id=row["owner_id"],
             created_at=row["created_at"],
+            tags=tags,
         )

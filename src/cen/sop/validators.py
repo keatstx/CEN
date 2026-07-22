@@ -11,6 +11,7 @@ from collections import deque
 from typing import List
 
 from cen.core.models import AOPDefinition, NodeType, ValidationIssue
+from cen.core.tags import unknown_tags
 
 
 def validate_draft(module: AOPDefinition) -> List[ValidationIssue]:
@@ -28,6 +29,22 @@ def validate_draft(module: AOPDefinition) -> List[ValidationIssue]:
                 ValidationIssue(severity="error", message="Node has empty id.")
             )
             continue
+        # Tags outside the project vocabulary — a warning, never a
+        # blocker. Keeps authoring frictionless while surfacing drift.
+        if node.metadata.tags:
+            bad = unknown_tags(node.metadata.tags)
+            if bad:
+                issues.append(
+                    ValidationIssue(
+                        severity="warning",
+                        node_id=node.id,
+                        message=(
+                            "Tag(s) not in the project vocabulary: "
+                            + ", ".join(bad)
+                            + ". Allowed, but check for typos."
+                        ),
+                    )
+                )
         if node.id != node.id.lower() or " " in node.id:
             issues.append(
                 ValidationIssue(

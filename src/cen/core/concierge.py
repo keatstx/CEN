@@ -101,6 +101,19 @@ class RetrievedChunk:
     citation: ConciergeCitation
 
 
+def _faq_chunk(faq, score: float) -> "RetrievedChunk":
+    return RetrievedChunk(
+        text=faq.answer,
+        score=float(score),
+        citation=ConciergeCitation(
+            faq_id=faq.id,
+            kind="faq",
+            question=faq.question,
+            score=round(float(score), 3),
+        ),
+    )
+
+
 async def _retrieve_faqs(
     *,
     question: str,
@@ -109,6 +122,8 @@ async def _retrieve_faqs(
     project_id: Optional[str],
     owner_id: Optional[str],
     top_k: int = 3,
+    boost_tags: Optional[List[str]] = None,
+    pin_ids: Optional[List[str]] = None,
 ) -> List[RetrievedChunk]:
     matches = await faq_store.search(
         question,
@@ -116,21 +131,23 @@ async def _retrieve_faqs(
         project_id=project_id,
         owner_id=owner_id,
         top_k=top_k,
+        boost_tags=boost_tags,
     )
     out: List[RetrievedChunk] = []
+    seen: set[str] = set()
+    # Pinned FAQs first — always surfaced on this step regardless of
+    # lexical/tag match. Scored just above the tag-boost ceiling so they
+    # lead the FAQ chunks without displacing the current-step context.
+    for faq_id in pin_ids or []:
+        faq = await faq_store.get(faq_id)
+        if faq is not None and faq.id not in seen:
+            seen.add(faq.id)
+            out.append(_faq_chunk(faq, 0.9))
     for faq, score in matches:
-        out.append(
-            RetrievedChunk(
-                text=faq.answer,
-                score=float(score),
-                citation=ConciergeCitation(
-                    faq_id=faq.id,
-                    kind="faq",
-                    question=faq.question,
-                    score=round(float(score), 3),
-                ),
-            )
-        )
+        if faq.id in seen:
+            continue
+        seen.add(faq.id)
+        out.append(_faq_chunk(faq, score))
     return out
 
 
@@ -368,12 +385,25 @@ async def answer_question(
     # whenever a module is known (case or module subject); SOP/queue
     # subjects fall through to global FAQs.
     faq_module = module_name or (case.module_name if case else None) or subject_module_name
+    # Resolve the current step so its tags boost matching FAQs and its
+    # faq_pin ids are always surfaced (3b, step-scoped FAQ).
+    step_tags: Optional[List[str]] = None
+    pin_ids: Optional[List[str]] = None
+    if aop is not None:
+        active_id = current_node_id or (case.pending_node if case else None)
+        if active_id:
+            step_node = next((n for n in aop.nodes if n.id == active_id), None)
+            if step_node is not None:
+                step_tags = step_node.metadata.tags
+                pin_ids = step_node.metadata.faq_pin
     faq_chunks = await _retrieve_faqs(
         question=question,
         faq_store=faq_store,
         module_name=faq_module,
         project_id=project_id or (case.project_id if case else None),
         owner_id=owner_id,
+        boost_tags=step_tags,
+        pin_ids=pin_ids,
     )
     workflow_chunks = _retrieve_workflow_context(
         case=case, aop=aop, current_node_id=current_node_id

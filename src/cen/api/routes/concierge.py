@@ -63,6 +63,7 @@ async def create_faq(
         project_id=body.project_id,
         source_filename=body.source_filename,
         owner_id=user.id,
+        tags=body.tags,
     )
 
 

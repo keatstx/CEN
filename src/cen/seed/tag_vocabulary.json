@@ -1,0 +1,39 @@
+{
+  "_doc": "Project-level tag vocabulary. Namespaced tags stamped on AOP steps and FAQs drive step-scoped FAQ retrieval (and, later, task/guardrail routing). Controlled facets list their known values; 'attribute' is an open long-tail bucket. Unknown facets/values are ALLOWED but flagged as warnings by the draft validator — this keeps authoring frictionless while surfacing drift. Seeded now; moves to a per-project DB table when multi-org lands.",
+  "facets": {
+    "function": [
+      "intake",
+      "consent",
+      "identity_verification",
+      "document_collection",
+      "eligibility_check",
+      "calculation",
+      "policy_lookup",
+      "drafting",
+      "approval",
+      "submission",
+      "tracking",
+      "negotiation",
+      "escalation",
+      "notification",
+      "reconciliation",
+      "closeout"
+    ],
+    "domain": [
+      "charity_care",
+      "insurance_appeal",
+      "medicaid",
+      "medicare",
+      "marketplace",
+      "debt",
+      "sdoh",
+      "orchestration"
+    ],
+    "sensitivity": [
+      "phi",
+      "financial",
+      "consent"
+    ],
+    "attribute": []
+  }
+}
