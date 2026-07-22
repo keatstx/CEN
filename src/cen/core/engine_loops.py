@@ -171,7 +171,15 @@ async def run_loop_region(
     loop_states: Dict[str, Any] = state.context.setdefault("__loop_state", {})
     ls = loop_states.setdefault(
         region.entry,
-        {"iteration": 0, "status": "running", "exit_met": False, "last_output": ""},
+        {
+            "iteration": 0,
+            "status": "running",
+            "exit_met": False,
+            # Static region facts, surfaced so the UI can render "round N
+            # of M" and a plain-language label without fetching the module.
+            "max_iterations": spec.max_iterations,
+            "label": engine.nodes[region.entry].metadata.label or region.entry,
+        },
     )
 
     # Resume past an already-completed region: re-apply the branch it

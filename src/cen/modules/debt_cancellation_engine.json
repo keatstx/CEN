@@ -404,41 +404,23 @@
       "type": "ACTION",
       "metadata": {
         "label": "Negotiation Round",
-        "description": "Counter-offer or supplemental dispute. Loop up to 3 rounds.",
+        "description": "Prepare and send a settlement counteroffer. The engine repeats this up to a set number of rounds; if the debt still isn't settled, the case is sent to a specialist for review.",
         "tags": [
           "domain:debt",
           "function:negotiation"
-        ]
+        ],
+        "loop": {
+          "exit_node": "negotiation_round",
+          "exit_condition_field": "settlement_reached",
+          "exit_when": "truthy",
+          "max_iterations": 3,
+          "on_limit_next": "escalation_router"
+        }
       }
     },
     {
-      "id": "negotiation_continue",
-      "type": "CONDITION",
-      "metadata": {
-        "label": "Continue Negotiation?",
-        "input_schema": [
-          {
-            "key": "negotiation_round_count",
-            "label": "How many negotiation rounds have happened so far?",
-            "type": "number",
-            "required": true,
-            "description": "Enter 0 for the first round. Up to 3 rounds are allowed before escalation."
-          }
-        ],
-        "tags": [
-          "domain:debt",
-          "function:negotiation"
-        ]
-      },
-      "condition_field": "negotiation_round_count",
-      "condition_operator": "<",
-      "condition_value": 3,
-      "true_next": "escalation_router",
-      "false_next": "escalation_router"
-    },
-    {
       "id": "escalation_router",
-      "type": "ACTION",
+      "type": "HANDOFF",
       "metadata": {
         "label": "Escalation Router",
         "description": "Route to IL AG, CFPB, state insurance dept, IL Medical Debt Relief Program, or Guild attorney.",
@@ -692,15 +674,6 @@
       "label": "partial/rejected"
     },
     {
-      "source": "negotiation_round",
-      "target": "negotiation_continue"
-    },
-    {
-      "source": "negotiation_continue",
-      "target": "escalation_router",
-      "label": "max rounds"
-    },
-    {
       "source": "escalation_router",
       "target": "il_medical_debt_relief"
     },
@@ -731,6 +704,22 @@
     {
       "source": "remaining_balance_check",
       "target": "case_close_success"
+    },
+    {
+      "source": "negotiation_round",
+      "target": "negotiation_round",
+      "label": "another round",
+      "kind": "loop_back"
+    },
+    {
+      "source": "negotiation_round",
+      "target": "credit_bureau_dispute",
+      "label": "settled"
+    },
+    {
+      "source": "negotiation_round",
+      "target": "escalation_router",
+      "label": "escalate"
     }
   ]
 }
