@@ -167,9 +167,12 @@ class OpenAICompatLanguageModel:
             # actionable part in the body ("model_decommissioned",
             # "organization_restricted", an unsupported parameter), and
             # without it a 403 is indistinguishable from a 403.
-            detail = (response.text or "").strip()[:300]
+            detail = (response.text or "").strip()[:400]
+            # Provider text first: it carries the actionable part, and
+            # downstream truncation would otherwise eat it behind the
+            # boilerplate status line and MDN link.
             raise httpx.HTTPStatusError(
-                f"{exc} | provider said: {detail}",
+                f"provider said: {detail} | {exc}",
                 request=exc.request,
                 response=exc.response,
             ) from exc

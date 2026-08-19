@@ -89,7 +89,7 @@ class FallbackLanguageModel:
                 primary=self._primary.backend_name,
                 error=str(exc),
             )
-            self._last_error = f"{type(exc).__name__}: {exc}"[:300]
+            self._last_error = f"{type(exc).__name__}: {exc}"[:600]
             text = await self._fallback.generate(prompt, max_tokens)
             return LLMGeneration(text=text, degraded=True, error=str(exc))
 
