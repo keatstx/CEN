@@ -14,6 +14,7 @@ import {
 } from "../api";
 import Button from "./ui/Button";
 import SuggestedQuestions from "./chat/SuggestedQuestions";
+import CitationList from "./chat/CitationList";
 
 interface Props {
   /** The case the concierge is currently grounded against. Drives
@@ -347,11 +348,7 @@ function ThreadTurn({
         {turn.text}
       </div>
       {turn.citations && turn.citations.length > 0 && (
-        <div className="mt-1.5 space-y-0.5">
-          {turn.citations.map((c, idx) => (
-            <CitationLine key={idx} citation={c} />
-          ))}
-        </div>
+        <CitationList citations={turn.citations} />
       )}
       {turn.actions && turn.actions.length > 0 && onAction && (
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -377,44 +374,6 @@ function ThreadTurn({
           Tip: your team can add this Q to the FAQ library.
         </div>
       )}
-    </div>
-  );
-}
-
-function CitationLine({ citation }: { citation: ConciergeCitation }) {
-  const tag =
-    citation.kind === "workflow"
-      ? "Step"
-      : citation.kind === "sop"
-      ? "SOP"
-      : citation.kind === "case_context"
-      ? "Case"
-      : "FAQ";
-  return (
-    <div className="text-[10px] text-[var(--color-text-muted)] truncate">
-      <span
-        className="inline-block px-1 mr-1 rounded text-[9px] font-mono"
-        style={{
-          background: "var(--color-bg)",
-          border: "1px solid var(--color-border)",
-        }}
-      >
-        {tag}
-      </span>
-      {citation.from_step && (
-        <span
-          className="inline-block px-1 mr-1 rounded text-[9px] font-medium"
-          style={{
-            background: "rgba(34,197,94,0.15)",
-            border: "1px solid rgb(34,197,94)",
-            color: "var(--color-text-secondary)",
-          }}
-          title="This answer came from a FAQ scoped to the step you're on"
-        >
-          From this step
-        </span>
-      )}
-      <span className="italic">{citation.question}</span>
     </div>
   );
 }
