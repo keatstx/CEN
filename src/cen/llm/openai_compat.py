@@ -160,7 +160,19 @@ class OpenAICompatLanguageModel:
                 "max_tokens": max_tokens,
             },
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # The status line alone doesn't say *why*. Providers put the
+            # actionable part in the body ("model_decommissioned",
+            # "organization_restricted", an unsupported parameter), and
+            # without it a 403 is indistinguishable from a 403.
+            detail = (response.text or "").strip()[:300]
+            raise httpx.HTTPStatusError(
+                f"{exc} | provider said: {detail}",
+                request=exc.request,
+                response=exc.response,
+            ) from exc
         data = response.json()
         return data["choices"][0]["message"]["content"]
 

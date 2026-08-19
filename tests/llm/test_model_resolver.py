@@ -223,3 +223,29 @@ class TestDiscoveryFailureDoesNotBlockGeneration:
             side_effect=httpx.ConnectError("no route"),
         ):
             assert await llm.is_available() is False
+
+
+class TestProviderErrorBodyIsSurfaced:
+    """A bare status line is not a diagnosis.
+
+    Prod returned "403 Forbidden" with no indication whether the account
+    was restricted, the key lacked entitlement to the model, or the
+    request shape was rejected — three very different fixes.
+    """
+
+    async def test_error_body_is_included(self):
+        llm = OpenAICompatLanguageModel(base_url="http://x/v1", model="a")
+        forbidden = httpx.Response(
+            403,
+            json={"error": {"message": "Organization has been restricted"}},
+            request=httpx.Request("POST", "http://x/v1/chat/completions"),
+        )
+
+        with patch.object(
+            llm._client, "get", new_callable=AsyncMock,
+            return_value=_models_response(["a"]),
+        ), patch.object(
+            llm._client, "post", new_callable=AsyncMock, return_value=forbidden
+        ):
+            with pytest.raises(httpx.HTTPStatusError, match="Organization has been restricted"):
+                await llm.generate("hello")
