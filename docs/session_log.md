@@ -34,13 +34,17 @@ uvicorn cen.api.app:create_app --factory --reload --port 8000
 cd frontend && npm run dev    # port 5173
 
 # Tests
-pytest tests/ -v              # 440 currently passing
+pytest tests/ -v              # 500 currently passing
 mypy src/cen                  # (needs `pip install mypy` + types-networkx to silence stub noise)
 
 # Frontend checks
 cd frontend && npx tsc -b && npm run lint && npm run build
 
-# Local hosted LLM (OpenAI-compatible)
+# Docker build (matches Render)
+docker build -t cen-test . && docker run --rm -p 10001:10000 cen-test
+
+# Local hosted LLM (OpenAI-compatible). CEN_LLM_MODEL takes a single id
+# or an ordered preference list ("a,b") - first one offered wins.
 CEN_LLM_BACKEND=api CEN_LLM_API_BASE=http://localhost:11434/v1 CEN_LLM_MODEL=llama3 \
   uvicorn cen.api.app:create_app --factory --reload
 
@@ -156,7 +160,7 @@ python -m cen.core.faq_classify --mode heuristic   # deterministic, default
 
 ### 2026-08-19 — Form-first Executor + concierge grounding + a three-day silent LLM outage
 
-**Commits (8, all on `origin/main`, deployed + prod-verified):**
+**Commits (9, all on `origin/main`, deployed + prod-verified):**
 - `195011e` feat(executor): form-first center panel — retire chat-led step
 - `bdb4e5a` fix(llm): swap retired Groq model and stop the silent mock fallback
 - `a588d6d` feat(concierge): collapse citation sources behind a disclosure
@@ -165,6 +169,7 @@ python -m cen.core.faq_classify --mode heuristic   # deterministic, default
 - `af96c6a` feat(llm): surface the last degradation cause on /ready
 - `f8e682b` fix(llm): include the provider's error body in HTTP failures
 - `29aa125` fix(llm): don't truncate away the actionable half of a provider error
+- `c6a9753` docs: session log for 2026-08-19 (first commit of this file; it had stayed untracked despite open item 9 saying otherwise)
 
 **What was done:**
 
@@ -200,6 +205,13 @@ python -m cen.core.faq_classify --mode heuristic   # deterministic, default
 *Tests* — `tests/llm/test_model_resolver.py` (NEW), `tests/concierge/test_concierge_grounding.py` (NEW), additions to `tests/llm/test_factory.py` and `tests/llm/test_openai_compat.py`. 440 → 500.
 
 *Config/docs* — `render.yaml` (preference list + a note that dashboard env vars override the blueprint), `README.md`
+
+**Open items raised:**
+- **13. `is_available()` is not proof of usability.** It verifies the configured model appears in the provider's `/models`, which proves the provider *offers* it, not that our project may *call* it — `/ready` read `llm_available: true` for hours while every completion 403'd. The conclusive probe is a real minimal completion (cached or startup-only); not built because it adds an API call to a public unauthenticated endpoint, so the cost/benefit is the owner's call.
+- **14. Stale `llama-3.3-70b-versatile` in the Groq allowlist**, un-removable via the console (the picker lists only current models). Left deliberately; harmless.
+- **15. FAQ library content problem** — meta-FAQs about the product are lexical magnets for "what does X mean" questions, and some answers surface `CONDITION node` / `APPROVAL node` jargon that violates CLAUDE.md §5. Curation, not code.
+- **16. `FallbackLanguageModel.backend_name` still reports the primary** after a fallback, so `/ready`'s `llm_backend` can't be read as "what actually answered". Cosmetic now that `mode` and `llm_last_error` expose degradation.
+- **Corrections to prior Current State** (not to prior entries, which stay verbatim): the sister-project note claimed FairClaims shares CEN's Groq API key — the console shows two distinct keys, FairClaims' dormant since 2026-05-01. What they share is the Groq *project*, whose model allowlist governs both. Open item 1's "flagged this session" was dated to 2026-07-22 since a newer entry now sits above it.
 
 **The through-line worth remembering:** three independent layers were hiding failures — a fallback that swallowed every exception, a health check that verified the wrong thing, and (mine) a truncation that discarded the actionable half of an error. Each looked healthy while doing the wrong thing. A green `/ready` meant "the host is reachable", not "this works". The diagnostics added to chase it are what turned a three-day silent outage into a URL and a checkbox — and the deterministic grounding work meant the concierge kept giving correct answers the whole time the model was down.
 
