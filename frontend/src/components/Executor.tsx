@@ -5,7 +5,6 @@ import GeneratedDocuments from "./GeneratedDocuments";
 import InformationSoFar from "./InformationSoFar";
 import LoopStatus from "./LoopStatus";
 import StepCard from "./StepCard";
-import ChatLedStep from "./chat/ChatLedStep";
 import Stepper from "./Stepper";
 
 interface Props {
@@ -111,29 +110,20 @@ export default function Executor({ session }: Props) {
 
           <GeneratedDocuments caseRecord={activeCase} />
 
-          {activeCase.status === "AWAITING_INPUT" ? (
-            <ChatLedStep
-              caseRecord={activeCase}
-              loading={loading}
-              onSubmit={handleProvideInput}
-              onApprove={handleApprove}
-              suggestions={suggestions}
-              onSuggestionApplied={(key) =>
-                setSuggestions((prev) => prev.filter((s) => s.key !== key))
-              }
-            />
-          ) : (
-            <StepCard
-              caseRecord={activeCase}
-              loading={loading}
-              onSubmit={handleProvideInput}
-              onApprove={handleApprove}
-              suggestions={suggestions}
-              onSuggestionApplied={(key) =>
-                setSuggestions((prev) => prev.filter((s) => s.key !== key))
-              }
-            />
-          )}
+          {/* The center panel is the input surface for every status,
+              including AWAITING_INPUT. Chat assists by extracting values
+              into `suggestions`, which StepCard offers as one-tap Apply
+              chips above the form — it never replaces the form. */}
+          <StepCard
+            caseRecord={activeCase}
+            loading={loading}
+            onSubmit={handleProvideInput}
+            onApprove={handleApprove}
+            suggestions={suggestions}
+            onSuggestionApplied={(key) =>
+              setSuggestions((prev) => prev.filter((s) => s.key !== key))
+            }
+          />
 
           <Documents caseRecord={activeCase} />
         </>

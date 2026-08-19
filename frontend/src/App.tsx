@@ -196,8 +196,8 @@ export default function App() {
       onAction={handleConciergeAction}
       // Chat answers → center step: the Concierge extracts SuggestedInputs
       // from what the user types in the right rail; merge them into the
-      // shared suggestions state that ChatLedStep/StepCard read so the
-      // center draft auto-fills. Merge (not replace) by key — an answer
+      // shared suggestions state the center StepCard reads, where they
+      // surface as one-tap Apply chips. Merge (not replace) by key — an answer
       // the extractor can't parse arrives as [] (truthy in JS) and must
       // not wipe already-captured suggestions.
       onSuggestionsUpdate={(incoming) =>
