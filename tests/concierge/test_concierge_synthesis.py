@@ -186,3 +186,50 @@ async def test_synthesis_intro_changes_with_history(faq_store, chat_store):
     )
     # First turn has no intro; second turn opens with a connector.
     assert second.answer.startswith(("Sure", "Got it"))
+
+
+class TestDegradedLLMNotPresentedAsSynthesis:
+    """A degraded LLM must never be reported as `llm_synthesis`.
+
+    Regression guard for the 2026-08-16 Groq model retirement: the
+    primary raised on every call, FallbackLanguageModel returned the
+    mock's canned filler, and because backend_name still read
+    "openai-compat" the mock-skip in _synthesize_with_llm never fired.
+    Production served hardcoded text under mode="llm_synthesis".
+    """
+
+    async def test_degraded_falls_back_to_rule_based_mode(
+        self, faq_store, chat_store
+    ):
+        from cen.llm.factory import FallbackLanguageModel
+        from cen.llm.mock import MockLanguageModel
+
+        class _RetiredModel:
+            backend_name = "openai-compat"
+
+            async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+                raise RuntimeError("model_decommissioned")
+
+            async def is_available(self) -> bool:
+                return True
+
+        llm = FallbackLanguageModel(
+            primary=_RetiredModel(), fallback=MockLanguageModel(), timeout=5.0
+        )
+
+        resp = await answer_question(
+            "what is charity care?",
+            faq_store=faq_store,
+            chat_store=chat_store,
+            case=_case(),
+            owner_id="user1",
+            llm=llm,
+        )
+
+        assert resp.mode == "synthesis"
+        # The canned mock filler must not reach the user.
+        assert "Federal Poverty Level guidelines" not in resp.answer
+        assert "Processed request" not in resp.answer
+        # The grounded rule-based answer still lands.
+        assert resp.answer
+        assert resp.citations

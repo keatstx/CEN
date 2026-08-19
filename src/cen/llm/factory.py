@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional
 
 import structlog
 
@@ -14,6 +15,21 @@ if TYPE_CHECKING:
     from cen.llm.base import LanguageModel
 
 logger = structlog.get_logger()
+
+
+@dataclass(frozen=True)
+class LLMGeneration:
+    """Result of a generate call, plus whether it degraded to the mock.
+
+    Callers that must not present canned mock text as real model output
+    (the concierge, chiefly) check ``degraded`` instead of trusting the
+    returned string. ``generate()`` stays string-returning so existing
+    callers are unaffected.
+    """
+
+    text: str
+    degraded: bool
+    error: Optional[str] = None
 
 
 class FallbackLanguageModel:
@@ -33,18 +49,33 @@ class FallbackLanguageModel:
         return self._fallback.backend_name
 
     async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+        result = await self.generate_checked(prompt, max_tokens)
+        return result.text
+
+    async def generate_checked(
+        self, prompt: str, max_tokens: int = 128
+    ) -> LLMGeneration:
+        """Generate, reporting whether the answer came from the fallback.
+
+        A provider outage or a retired model id makes the primary raise;
+        we still answer (the mock) so the user is never blocked, but the
+        result is flagged so callers can decline to pass canned text off
+        as model output.
+        """
         try:
-            return await asyncio.wait_for(
+            text = await asyncio.wait_for(
                 self._primary.generate(prompt, max_tokens),
                 timeout=self._timeout,
             )
-        except (asyncio.TimeoutError, Exception) as exc:
+            return LLMGeneration(text=text, degraded=False)
+        except Exception as exc:  # noqa: BLE001 - any failure degrades
             await logger.awarning(
                 "llm_fallback_triggered",
                 primary=self._primary.backend_name,
                 error=str(exc),
             )
-            return await self._fallback.generate(prompt, max_tokens)
+            text = await self._fallback.generate(prompt, max_tokens)
+            return LLMGeneration(text=text, degraded=True, error=str(exc))
 
     async def is_available(self) -> bool:
         return await self._primary.is_available()

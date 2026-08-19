@@ -4,7 +4,13 @@
 # above after every deploy.
 #
 # LLM: production runs Groq's free tier via the OpenAI-compatible
-# `api` backend. Set CEN_LLM_API_KEY in the Render dashboard (Secrets) —
+# `api` backend. NOTE: Groq retires models on a published schedule --
+# llama-3.3-70b-versatile (the previous value) was shut down
+# 2026-08-16 and every call silently degraded to the mock until the
+# model was swapped. `/ready` now reports llm_available=false when the
+# configured model is missing from the provider's /models list, so a
+# retirement shows up as a red health check instead of canned text.
+# Check https://console.groq.com/docs/deprecations before deploys. Set CEN_LLM_API_KEY in the Render dashboard (Secrets) —
 # it's `sync: false` so it's never committed. The deployment_mode
 # stays `synthetic` (default), which means the BAA gate is bypassed:
 # the api backend is safe here ONLY because no real PHI lives in this
@@ -23,7 +29,7 @@ services:
       - key: CEN_LLM_API_BASE
         value: https://api.groq.com/openai/v1
       - key: CEN_LLM_MODEL
-        value: llama-3.3-70b-versatile
+        value: openai/gpt-oss-120b
       - key: CEN_LLM_API_KEY
         sync: false           # set in Render dashboard (Secret)
       - key: CEN_DB_PATH

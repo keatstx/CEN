@@ -262,6 +262,18 @@ async def _synthesize_with_llm(
     )
     prompt = render_prompt(context_block=context_block, question=question)
     try:
+        # generate_checked reports when the stack degraded to the mock
+        # (provider outage, retired model id). Canned mock filler must
+        # not be returned as a grounded answer — treat it as a miss so
+        # the caller uses the rule-based stitcher, which is at least
+        # built from the retrieved chunks. Backends without the method
+        # (plain Protocol impls, test doubles) keep the old path.
+        checked = getattr(llm, "generate_checked", None)
+        if checked is not None:
+            result = await checked(prompt, max_tokens=320)
+            if result.degraded:
+                return None
+            return result.text.strip()
         return (await llm.generate(prompt, max_tokens=320)).strip()
     except Exception:  # noqa: BLE001
         # LLM failure is recoverable — caller falls back to the

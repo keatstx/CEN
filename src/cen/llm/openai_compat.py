@@ -43,9 +43,34 @@ class OpenAICompatLanguageModel:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
+    @property
+    def model(self) -> str:
+        return self._model
+
     async def is_available(self) -> bool:
+        """True only when the *configured model* is actually offered.
+
+        Checking that /models returns 200 is not enough: it proves the
+        key is valid and the host is reachable, both of which stay true
+        after a provider retires the model we ask for. Groq shut down
+        llama-3.3-70b-versatile on 2026-08-16 while /models kept
+        answering 200, so every completion failed and silently degraded
+        to the mock behind a green health check. Verify membership.
+
+        Providers that don't enumerate models return an empty list; we
+        treat reachability as available there rather than hard-failing.
+        """
         try:
             response = await self._client.get("/models")
-            return response.status_code == 200
-        except httpx.HTTPError:
+            if response.status_code != 200:
+                return False
+            payload = response.json()
+        except (httpx.HTTPError, ValueError):
             return False
+        entries = payload.get("data") if isinstance(payload, dict) else None
+        if not entries:
+            return True
+        offered = {
+            e.get("id") for e in entries if isinstance(e, dict) and e.get("id")
+        }
+        return not offered or self._model in offered

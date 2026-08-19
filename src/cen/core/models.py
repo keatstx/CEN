@@ -564,6 +564,10 @@ class ReadyResponse(BaseModel):
     modules_loaded: List[str]
     llm_backend: str
     llm_available: bool
+    # The model id actually asked for. Surfaced because a retired model
+    # is invisible in `llm_backend` alone (which only names the
+    # transport) and is the likeliest cause of llm_available=false.
+    llm_model: Optional[str] = None
     deployment_mode: str = "synthetic"
 
 

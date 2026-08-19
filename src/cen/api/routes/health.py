@@ -27,5 +27,6 @@ async def ready(
         modules_loaded=list(engines.keys()),
         llm_backend=llm.backend_name,
         llm_available=await llm.is_available(),
+        llm_model=settings.llm_model if settings.llm_backend == "api" else None,
         deployment_mode=settings.deployment_mode,
     )

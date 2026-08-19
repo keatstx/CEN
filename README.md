@@ -69,7 +69,7 @@ frontend/src/            # React 19 + Vite + TS + Tailwind (state via App-level 
 | `gguf` | local llama.cpp | yes (no network) |
 | `api` | OpenAI-compatible endpoint (Ollama, vLLM, hosted) | **only with a signed BAA** |
 
-Production runs `api` against Groq (`llama-3.3-70b-versatile`). New providers go behind the `LanguageModel` Protocol — never call third-party SDKs from routes/services. When `deployment_mode=production`, the `api` backend requires `CEN_LLM_BAA_CONFIRMED=true` or the app refuses to start.
+Production runs `api` against Groq (`openai/gpt-oss-120b`). Groq retires models on a published schedule, so check [their deprecations page](https://console.groq.com/docs/deprecations) when `/ready` reports `llm_available: false`. New providers go behind the `LanguageModel` Protocol — never call third-party SDKs from routes/services. When `deployment_mode=production`, the `api` backend requires `CEN_LLM_BAA_CONFIRMED=true` or the app refuses to start.
 
 ## Setup
 
