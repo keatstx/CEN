@@ -48,6 +48,11 @@ class FallbackLanguageModel:
     def fallback_name(self) -> str:
         return self._fallback.backend_name
 
+    @property
+    def model(self) -> str:
+        """The primary's resolved model, for health reporting."""
+        return getattr(self._primary, "model", "") or ""
+
     async def generate(self, prompt: str, max_tokens: int = 128) -> str:
         result = await self.generate_checked(prompt, max_tokens)
         return result.text

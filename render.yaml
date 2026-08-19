@@ -10,6 +10,14 @@
 # model was swapped. `/ready` now reports llm_available=false when the
 # configured model is missing from the provider's /models list, so a
 # retirement shows up as a red health check instead of canned text.
+# CEN_LLM_MODEL is an ordered preference list: the first model the
+# provider still offers wins, resolved at first use and re-resolved
+# after a failure. 20b leads because the concierge is an interactive
+# chat rail (~2x the throughput of 120b) and answers are grounded in
+# retrieved chunks, so model size buys little; 120b is the step-down.
+# Both are Apache 2.0 open-weights. Flip the order if generated appeal
+# letters come back weak -- it is one env var, no redeploy of logic.
+#
 # Check https://console.groq.com/docs/deprecations before deploys. Set CEN_LLM_API_KEY in the Render dashboard (Secrets) —
 # it's `sync: false` so it's never committed. The deployment_mode
 # stays `synthetic` (default), which means the BAA gate is bypassed:
@@ -29,7 +37,7 @@ services:
       - key: CEN_LLM_API_BASE
         value: https://api.groq.com/openai/v1
       - key: CEN_LLM_MODEL
-        value: openai/gpt-oss-120b
+        value: openai/gpt-oss-20b,openai/gpt-oss-120b
       - key: CEN_LLM_API_KEY
         sync: false           # set in Render dashboard (Secret)
       - key: CEN_DB_PATH

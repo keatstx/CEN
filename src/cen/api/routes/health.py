@@ -22,11 +22,14 @@ async def ready(
     llm=Depends(get_llm),
     settings: Settings = Depends(get_settings),
 ):
+    available = await llm.is_available()
     return ReadyResponse(
         status="ok",
         modules_loaded=list(engines.keys()),
         llm_backend=llm.backend_name,
-        llm_available=await llm.is_available(),
-        llm_model=settings.llm_model if settings.llm_backend == "api" else None,
+        llm_available=available,
+        # Resolved *after* is_available(), which performs the resolution —
+        # reports what will actually be called, not what was configured.
+        llm_model=getattr(llm, "model", None) or None,
         deployment_mode=settings.deployment_mode,
     )
