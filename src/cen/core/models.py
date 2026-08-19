@@ -568,6 +568,10 @@ class ReadyResponse(BaseModel):
     # is invisible in `llm_backend` alone (which only names the
     # transport) and is the likeliest cause of llm_available=false.
     llm_model: Optional[str] = None
+    # Why the LLM last fell back to the mock, if it did. Operator
+    # diagnostics: a provider rejecting our request shape is otherwise
+    # invisible outside host logs. Truncated, never echoes credentials.
+    llm_last_error: Optional[str] = None
     deployment_mode: str = "synthetic"
 
 

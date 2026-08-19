@@ -39,6 +39,10 @@ class FallbackLanguageModel:
         self._primary = primary
         self._fallback = fallback
         self._timeout = timeout
+        # Last degradation cause, for operator diagnosis. Without this
+        # the only record of *why* the primary failed is a log line, and
+        # on a hosted deploy that can mean no record you can reach.
+        self._last_error: Optional[str] = None
 
     @property
     def backend_name(self) -> str:
@@ -47,6 +51,11 @@ class FallbackLanguageModel:
     @property
     def fallback_name(self) -> str:
         return self._fallback.backend_name
+
+    @property
+    def last_error(self) -> Optional[str]:
+        """Why the primary last degraded, or None if it is healthy."""
+        return self._last_error
 
     @property
     def model(self) -> str:
@@ -72,6 +81,7 @@ class FallbackLanguageModel:
                 self._primary.generate(prompt, max_tokens),
                 timeout=self._timeout,
             )
+            self._last_error = None
             return LLMGeneration(text=text, degraded=False)
         except Exception as exc:  # noqa: BLE001 - any failure degrades
             await logger.awarning(
@@ -79,6 +89,7 @@ class FallbackLanguageModel:
                 primary=self._primary.backend_name,
                 error=str(exc),
             )
+            self._last_error = f"{type(exc).__name__}: {exc}"[:300]
             text = await self._fallback.generate(prompt, max_tokens)
             return LLMGeneration(text=text, degraded=True, error=str(exc))
 

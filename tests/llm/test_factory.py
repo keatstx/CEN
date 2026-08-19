@@ -141,3 +141,60 @@ class TestDegradedReporting:
         )
 
         assert await llm.generate("anything") == "real model output"
+
+
+class TestLastErrorDiagnostics:
+    """Operators need to see *why* the LLM degraded.
+
+    On a hosted deploy the only prior record was a log line you may not
+    be able to reach, which is how a request-level rejection stayed
+    invisible behind a green health check.
+    """
+
+    class _Failing:
+        backend_name = "openai-compat"
+
+        async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+            raise RuntimeError("400 Bad Request: unsupported parameter")
+
+        async def is_available(self) -> bool:
+            return True
+
+    class _Working:
+        backend_name = "openai-compat"
+
+        async def generate(self, prompt: str, max_tokens: int = 128) -> str:
+            return "fine"
+
+        async def is_available(self) -> bool:
+            return True
+
+    async def test_records_the_failure_cause(self):
+        llm = FallbackLanguageModel(
+            primary=self._Failing(), fallback=MockLanguageModel(), timeout=5.0
+        )
+
+        await llm.generate("anything")
+
+        assert llm.last_error is not None
+        assert "unsupported parameter" in llm.last_error
+        assert "RuntimeError" in llm.last_error
+
+    async def test_clears_on_recovery(self):
+        llm = FallbackLanguageModel(
+            primary=self._Failing(), fallback=MockLanguageModel(), timeout=5.0
+        )
+        await llm.generate("anything")
+        assert llm.last_error is not None
+
+        llm._primary = self._Working()
+        await llm.generate("anything")
+
+        assert llm.last_error is None
+
+    async def test_none_when_never_degraded(self):
+        llm = FallbackLanguageModel(
+            primary=self._Working(), fallback=MockLanguageModel(), timeout=5.0
+        )
+
+        assert llm.last_error is None

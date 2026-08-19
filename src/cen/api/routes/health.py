@@ -31,5 +31,6 @@ async def ready(
         # Resolved *after* is_available(), which performs the resolution —
         # reports what will actually be called, not what was configured.
         llm_model=getattr(llm, "model", None) or None,
+        llm_last_error=getattr(llm, "last_error", None),
         deployment_mode=settings.deployment_mode,
     )
