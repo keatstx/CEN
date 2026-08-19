@@ -204,7 +204,7 @@ export function approveSession(id: string): Promise<WorkflowResult> {
 
 export interface ConciergeCitation {
   faq_id: string | null;
-  kind: "faq" | "workflow" | "sop" | "case_context";
+  kind: "faq" | "workflow" | "input_field" | "sop" | "case_context";
   question: string;
   score: number;
   node_id: string | null;

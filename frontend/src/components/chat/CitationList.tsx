@@ -67,6 +67,8 @@ function CitationLine({ citation }: { citation: ConciergeCitation }) {
   const tag =
     citation.kind === "workflow"
       ? "Step"
+      : citation.kind === "input_field"
+      ? "Field"
       : citation.kind === "sop"
       ? "SOP"
       : citation.kind === "case_context"

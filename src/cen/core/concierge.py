@@ -32,6 +32,14 @@ from typing import List, Optional
 from cen.core.chat_store import ChatMessageStore
 from cen.core.concierge_prompt import build_context_block, render_prompt
 from cen.core.faq_store import FAQStore
+from cen.core.concierge_grounding import (
+    MIN_FAQ_LEAD_SCORE,
+    RetrievedChunk,
+    describe_pending_step,
+    has_useful_grounding,
+    retrieve_input_fields,
+    select_lead,
+)
 from cen.core.models import (
     AOPDefinition,
     ChatMessage,
@@ -86,19 +94,6 @@ def _is_out_of_scope(question: str) -> bool:
 
 
 # ── Retrieval ────────────────────────────────────────────────────────
-
-
-@dataclass
-class RetrievedChunk:
-    """One grounding chunk produced by a retriever.
-
-    The synthesis layer treats `text` as the body to surface and
-    `citation` as the source-of-truth pointer the UI renders.
-    """
-
-    text: str
-    score: float
-    citation: ConciergeCitation
 
 
 def _faq_chunk(faq, score: float, from_step: bool = False) -> "RetrievedChunk":
@@ -184,6 +179,10 @@ def _retrieve_workflow_context(
                     # High score — always include. The LLM needs case
                     # state to answer "what's next" / "what should I do".
                     score=0.95,
+                    # Context, not an answer: 0.95 buys inclusion in the
+                    # context block, it does not mean this is what the
+                    # user asked about.
+                    lead_eligible=False,
                     citation=ConciergeCitation(
                         kind="workflow",
                         question=f"Current step — {label}",
@@ -198,6 +197,7 @@ def _retrieve_workflow_context(
             RetrievedChunk(
                 text=f"Steps already done in this case: {completed}.",
                 score=0.85,
+                lead_eligible=False,
                 citation=ConciergeCitation(
                     kind="workflow",
                     question="Recently completed steps",
@@ -313,17 +313,30 @@ def _synthesize_rule_based(
                 f"You're on \"{node.metadata.label}\" right now. "
             )
 
-    # Lead: the first non-empty paragraph of the top FAQ chunk.
-    faq_chunks = [c for c in chunks if c.citation.kind == "faq"]
-    if faq_chunks:
-        lead = _first_paragraph(faq_chunks[0].text)
-    else:
-        lead = _first_paragraph(chunks[0].text)
+    # Lead: the highest-scoring chunk, whatever kind it is. Leading
+    # with the top FAQ regardless of score is what answered "what does
+    # 'how many people in household' mean" with a paragraph about
+    # environmental exposure records — a 0.24 FAQ beat the 0.95
+    # current-step chunk purely because it was an FAQ.
+    lead_chunk = select_lead(chunks)
+    if lead_chunk is None:
+        return _NO_MATCH_REPLY
+    lead = _first_paragraph(lead_chunk.text)
 
+    # Only advertise *other* FAQs that actually cleared the floor —
+    # "I also found 2 related answers" pointing at noise is worse than
+    # saying nothing.
+    related = [
+        c
+        for c in chunks
+        if c.citation.kind == "faq"
+        and c is not lead_chunk
+        and c.score >= MIN_FAQ_LEAD_SCORE
+    ]
     follow_up = ""
-    if len(faq_chunks) > 1:
-        plural = "answer" if len(faq_chunks) - 1 == 1 else "answers"
-        follow_up = f" I also found {len(faq_chunks) - 1} related {plural}."
+    if related:
+        plural = "answer" if len(related) == 1 else "answers"
+        follow_up = f" I also found {len(related)} related {plural}."
 
     return f"{intro}{case_prefix}{lead}{follow_up}".strip()
 
@@ -443,7 +456,14 @@ async def answer_question(
             for c in retrieve_sop_chunks(sop=subject_sop)
         ]
 
-    fused = _fuse(faq_chunks, workflow_chunks + subject_chunks, top_k=6)
+    # The pending step's own input fields. A navigator asking what a
+    # field means is answered by the description authored for that
+    # field, not by the FAQ library — which knows nothing about it.
+    field_chunks = retrieve_input_fields(case=case, question=question)
+
+    fused = _fuse(
+        field_chunks, faq_chunks, workflow_chunks + subject_chunks, top_k=6
+    )
 
     # 4) Suggestions: extract structured values from the chat history
     # given the case's pending input fields. Independent of whether
@@ -455,7 +475,12 @@ async def answer_question(
 
     # 5) Synthesize. Prefer the LLM-grounded path; fall back to the
     # rule-based stitcher when no LLM is configured (or fails).
-    if not fused:
+    #
+    # `not fused` was never a real check for "can this be answered":
+    # the FAQ store's floor is 0.05, so stopword overlap alone ("what
+    # does ... mean") always returned something, and it got asserted as
+    # an answer. Require grounding that clears the relevance floor.
+    if not has_useful_grounding(fused):
         from cen.core.proactive import derive_actions  # local: avoids cycle
 
         no_match_actions = derive_actions(
@@ -463,8 +488,14 @@ async def answer_question(
             case=case,
             available_modules=available_modules or [],
         )
+        # Say what the step needs even when the library has nothing —
+        # "I don't know" alone leaves the navigator stuck.
+        step_recap = describe_pending_step(case)
+        no_match_answer = _NO_MATCH_REPLY
+        if step_recap:
+            no_match_answer = f"{_NO_MATCH_REPLY} {step_recap}"
         response = ConciergeResponse(
-            answer=_NO_MATCH_REPLY,
+            answer=no_match_answer,
             mode="no_match",
             suggested_inputs=suggestions,
             actions=no_match_actions,
